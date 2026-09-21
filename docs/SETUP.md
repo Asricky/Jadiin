@@ -52,6 +52,10 @@ Migrasi ada di `supabase/migrations/`. Untuk mereset **database lokal** dan mene
 
 Di Authentication → URL Configuration, set Site URL ke origin Vercel dan tambahkan redirect `/auth/callback` dan `/auth/callback?next=/reset-password`. Aktifkan konfirmasi email dan konfigurasi SMTP production. Registrasi lokal mengikuti pengaturan `supabase/config.toml`; email reset dapat dibaca lewat inbox lokal. Profil otomatis dibuat melalui trigger Auth.
 
+Migrasi `202609210005_explicit_service_grants.sql` menetapkan izin tabel untuk `service_role` secara eksplisit. Ini diperlukan pada hosted Supabase yang tidak mewarisi default grants seperti stack lokal. RLS dan izin terbatas untuk `anon`/`authenticated` tidak dilonggarkan. Jangan menganggap berhasil membuat tabel berarti backend otomatis memiliki seluruh izin yang dibutuhkan.
+
+Nama aplikasi dan repository adalah **Jadiin**. `project_id = "makrab-planner"` di konfigurasi lokal dipertahankan sebagai identitas container development agar data lokal yang sudah ada tidak terpisah ke stack baru; itu bukan nama proyek hosted.
+
 ## RLS dan authorization
 
 - Semua tabel domain mengaktifkan RLS. Organizer hanya dapat membaca baris miliknya melalui `events.owner_id = auth.uid()`; child tables memakai `owns_event(event_id)`.
