@@ -25,6 +25,9 @@ export default async function Stage1({ params }: { params: Promise<{ slug: strin
                 name: p.name,
                 whatsapp: p.whatsapp,
                 vehicle_type: p.vehicle_type,
+                vehicle_owner: p.vehicle_owner || '',
+                vehicle_driver: p.vehicle_driver || '',
+                vehicle_capacity: p.vehicle_capacity || 5,
                 dates: data.availability
                   .filter((a) => a.participant_id === p.id)
                   .map((a) => a.event_date_id),

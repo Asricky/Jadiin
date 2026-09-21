@@ -1,4 +1,6 @@
 'use client';
+import { Textarea } from './ui/textarea';
+import { Input } from './ui/input';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -6,6 +8,7 @@ import { z } from 'zod';
 import { eventSchema } from '@/lib/validation';
 import { api } from '@/lib/utils';
 import { Notice } from './common';
+import { Progress } from './ui/progress';
 import { Button } from './ui/button';
 import { DatesEditor, VillaEditor } from './editors';
 import { useRouter } from 'next/navigation';
@@ -25,11 +28,11 @@ export function CreateWizard() {
   return (
     <div className="stack">
       <div>
-        <div className="stepper">
-          {[0, 1, 2].map((n) => (
-            <span key={n} className={`step ${n <= step ? 'done' : ''}`} />
-          ))}
-        </div>
+        <Progress
+          value={((step + 1) / 3) * 100}
+          className="mb-3 h-1"
+          aria-label="Progres membuat acara"
+        />
         <small className="muted">
           {step + 1} / 3 · {['Tentang acara', 'Pilihan tanggal', 'Pilihan villa'][step]}
         </small>
@@ -49,7 +52,7 @@ export function CreateWizard() {
         >
           <label className="field">
             Nama acara
-            <input
+            <Input
               required
               placeholder="Makrab Cerita Kita 2026"
               {...register('name', {
@@ -66,19 +69,19 @@ export function CreateWizard() {
           </label>
           <label className="field">
             Link acara
-            <input required {...register('slug')} placeholder="makrab-cerita-kita" />
+            <Input required {...register('slug')} placeholder="makrab-cerita-kita" />
             <small>makrabplanner / e / nama-acara</small>
           </label>
           <label className="field">
             Deskripsi
-            <textarea
+            <Textarea
               {...register('description')}
-              placeholder="Waktunya rehat sebentar dan bikin cerita bareng."
+              placeholder="Ceritakan tujuan acara dan informasi yang perlu peserta tahu."
             />
           </label>
           <label className="field">
             Batas isi jawaban (WIB, opsional)
-            <input type="datetime-local" {...register('stage1_deadline')} />
+            <Input type="datetime-local" {...register('stage1_deadline')} />
           </label>
           <Notice error>
             {error ||

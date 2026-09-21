@@ -60,7 +60,7 @@ export async function bundle(event: Event, owner = false): Promise<Bundle> {
     '*',
     'id,villa_id,storage_path',
     owner
-      ? 'id,event_id,name,whatsapp,vehicle_type,stage1_submitted_at,stage2_submitted_at'
+      ? 'id,event_id,name,whatsapp,vehicle_type,vehicle_owner,vehicle_driver,vehicle_capacity,stage1_submitted_at,stage2_submitted_at'
       : 'id,name',
     'participant_id,event_date_id',
     'participant_id,villa_id',

@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 import Link from 'next/link';
-import { Trees, ArrowRight, CalendarDays, Users } from 'lucide-react';
+import { ArrowRight, CalendarDays, Users } from 'lucide-react';
 import { notFound } from 'next/navigation';
 import { publicEvent, HttpError } from '@/lib/server';
 import { service } from '@/lib/supabase/server';
@@ -30,18 +30,13 @@ export default async function Landing({
     (!event.stage1_deadline || new Date(event.stage1_deadline) > new Date());
   return (
     <main className="narrow section stack">
-      <div className="hero-art">
-        {event.cover_path ? (
-          <img
-            src={mediaUrl(event.cover_path)!}
-            alt=""
-            style={{ width: '100%', height: 270, objectFit: 'cover' }}
-          />
-        ) : (
-          <Trees size={120} strokeWidth={1} />
-        )}
-        <span className="hero-sticker sticker-two">Good friends. Great memories.</span>
-      </div>
+      {event.cover_path && (
+        <img
+          className="rounded-xl w-full max-h-80 object-cover"
+          src={mediaUrl(event.cover_path)!}
+          alt={event.name}
+        />
+      )}
       <div className="row">
         <span className={`badge badge-${event.status}`}>{statusLabel[event.status]}</span>
         <span className="muted" style={{ fontSize: 12 }}>

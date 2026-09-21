@@ -14,13 +14,16 @@ export default async function Dashboard({ params }: { params: Promise<{ slug: st
   return (
     <main className="narrow section stack">
       <span className="eyebrow">JAWABANMU SUDAH TERSIMPAN</span>
-      <h1>
-        Makasih, {p.name}!<br />
-        Rencana mulai terbentuk.
-      </h1>
+      <h1>Terima kasih, {p.name}.</h1>
       <p>Hasil ini masih bisa berubah sampai organizer menentukan keputusan final.</p>
+      {event.status === 'STAGE_1_OPEN' && (
+        <Link className="text-link" href={`/e/${slug}/stage-1`}>
+          Ubah jawaban saya
+        </Link>
+      )}
+      <PlanningAnalytics data={data} />
       <div className="card card-lime stack-sm">
-        <h3>Simpan pintu masukmu.</h3>
+        <h3>Link akses pribadi</h3>
         <p style={{ fontSize: 13 }}>
           Link ini khusus untuk kamu. Simpan untuk membuka jawaban di perangkat lain; jangan
           bagikan.
@@ -32,12 +35,6 @@ export default async function Dashboard({ params }: { params: Promise<{ slug: st
           />
         </div>
       </div>
-      {event.status === 'STAGE_1_OPEN' && (
-        <Link className="text-link" href={`/e/${slug}/stage-1`}>
-          Ubah jawaban saya
-        </Link>
-      )}
-      <PlanningAnalytics data={data} />
     </main>
   );
 }

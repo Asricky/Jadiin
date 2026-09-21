@@ -8,7 +8,7 @@ import { session } from '@/lib/session';
 export async function POST(req: Request) {
   try {
     sameOrigin(req);
-    await rate(req, 'upload', 20);
+    await rate(req, 'upload', 150);
     const raw = await req.json();
     const db = service();
     if (raw.action === 'sign') {
@@ -86,6 +86,23 @@ export async function POST(req: Request) {
       p_owner: actor?.event.owner_id ?? null,
     });
     if (commitError) throw commitError;
+    if (u.kind === 'media' && villa_id) {
+      const [{ data: image }, { data: villa }] = await Promise.all([
+        db
+          .from('villa_images')
+          .select('id,villa_id,storage_path')
+          .eq('event_id', u.event_id)
+          .eq('storage_path', u.path)
+          .single(),
+        db
+          .from('villas')
+          .select('cover_path')
+          .eq('id', villa_id)
+          .eq('event_id', u.event_id)
+          .single(),
+      ]);
+      return NextResponse.json({ ok: true, image, cover: villa?.cover_path });
+    }
     return NextResponse.json({ ok: true });
   } catch (e) {
     return errorResponse(e);

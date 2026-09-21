@@ -18,9 +18,9 @@ export default async function ThankYou({ params }: { params: Promise<{ slug: str
   if (!payment) redirect(`/e/${slug}/stage-2`);
   return (
     <main className="narrow section stack" style={{ textAlign: 'center', paddingTop: 70 }}>
-      <CheckCircle2 size={70} strokeWidth={1.2} style={{ margin: 'auto', color: '#5d8653' }} />
-      <span className="eyebrow">SATU LANGKAH LEBIH DEKAT</span>
-      <h1>Terima kasih, {p.name}! 🎉</h1>
+      <CheckCircle2 size={70} strokeWidth={1.2} style={{ margin: 'auto', color: '#2563eb' }} />
+
+      <h1>Terima kasih, {p.name}.</h1>
       <p>
         {payment.status === 'REJECTED'
           ? 'Organizer meminta perbaikan bukti pembayaran.'

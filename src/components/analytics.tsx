@@ -1,97 +1,141 @@
-import { CalendarDays, House, Users } from 'lucide-react';
-import { DateGrid } from './date-grid';
+﻿import { DateGrid } from './date-grid';
 import { VillaCard } from './villa-card';
 import { prettyDate } from '@/lib/utils';
 import type { Bundle } from '@/types/domain';
 import { analytics } from '@/lib/planning';
 export function PlanningAnalytics({ data, admin = false }: { data: Bundle; admin?: boolean }) {
   const a = analytics(data);
+  const pair = a.leadingPairs[0];
   return (
     <div className="stack">
-      <div className="grid grid-2">
-        <section className="card card-lime stack-sm">
-          <div className="row">
-            <CalendarDays size={20} />
-            <span className="eyebrow">TANGGAL PALING MEMUNGKINKAN</span>
+      <div className="grid grid-2 planning-grid">
+        <section className="card stack">
+          <div className="stack-sm">
+            <h3>Perkiraan tanggal</h3>
+            {pair ? (
+              <>
+                <strong className="text-xl">
+                  {prettyDate(pair.start.date)}
+                  <br />
+                  <span className="font-normal text-muted-foreground">sampai</span>{' '}
+                  {prettyDate(pair.end.date)}
+                </strong>
+                <p>
+                  {pair.count} dari {data.participants.length} peserta bisa di kedua hari. 2 hari, 1
+                  malam.
+                </p>
+                {a.leadingPairs.length > 1 && (
+                  <details>
+                    <summary className="text-sm text-link">
+                      {a.leadingPairs.length} pilihan tanggal dengan hasil imbang
+                    </summary>
+                    <div className="stack-sm mt-3">
+                      {a.leadingPairs.map((p) => (
+                        <small key={p.start.id}>
+                          {prettyDate(p.start.date)} – {prettyDate(p.end.date)}
+                        </small>
+                      ))}
+                    </div>
+                  </details>
+                )}
+              </>
+            ) : (
+              <p>Belum ada peserta yang tersedia selama dua hari berurutan.</p>
+            )}
           </div>
-          {a.leadingDates.length ? (
-            a.leadingDates.map((d) => <h3 key={d.id}>{prettyDate(d.date)}</h3>)
-          ) : (
-            <h3>Menunggu pilihan teman</h3>
-          )}
-          <p>
-            {a.maxDate} dari {data.participants.length} peserta tersedia
-            {a.leadingDates.length > 1 ? ' · Hasil masih imbang' : ''}
-          </p>
+          <DateGrid
+            compact
+            dates={data.dates}
+            counts={a.dateCounts}
+            total={data.participants.length}
+            value={pair ? [pair.start.id, pair.end.id] : []}
+          />
+          <small className="muted">
+            Angka: peserta yang bisa per hari. Biru pekat berarti lebih banyak peserta. Garis biru:
+            pasangan tanggal teratas.
+          </small>
         </section>
-        <section className="card stack-sm">
-          <div className="row">
-            <House size={20} />
-            <span className="eyebrow">VILLA FAVORIT SEMENTARA</span>
+        <section className="stack-sm">
+          <div className="row between">
+            <h3>Villa favorit sementara</h3>
+            {a.maxVilla > 0 && <span className="pill">{a.maxVilla} suara</span>}
           </div>
           {a.leadingVillas.length ? (
-            a.leadingVillas.map((v) => <h3 key={v.id}>{v.name}</h3>)
+            a.leadingVillas.map((v) => <VillaCard key={v.id} villa={v} images={data.images} />)
           ) : (
-            <h3>Belum ada suara</h3>
+            <div className="empty">Belum ada suara masuk.</div>
           )}
-          <p>
-            {a.maxVilla} suara{a.leadingVillas.length > 1 ? ' · Voting sementara masih imbang' : ''}
-          </p>
+          {a.leadingVillas.length > 1 && (
+            <small className="muted">
+              Jumlah suara masih imbang. Keputusan final ditetapkan organizer.
+            </small>
+          )}
         </section>
       </div>
-      <section className="card stack">
-        <div className="row between">
-          <h3>Kalender kebersamaan</h3>
-          <span className="pill">{data.participants.length} peserta</span>
-        </div>
-        <p style={{ fontSize: 13 }}>
-          Semakin hijau, semakin banyak yang bisa. Angka menunjukkan jumlah teman yang tersedia.
-        </p>
-        <DateGrid dates={data.dates} counts={a.dateCounts} total={data.participants.length} />
-      </section>
-      {admin && (
-        <section className="card stack">
-          <h3>Detail ketersediaan</h3>
-          {[...data.dates]
-            .sort((x, y) => a.dateCounts[y.id] - a.dateCounts[x.id])
-            .map((d) => {
-              const available = data.participants.filter((p) =>
-                data.availability.some(
-                  (v) => v.event_date_id === d.id && v.participant_id === p.id,
-                ),
-              );
-              return (
-                <details key={d.id}>
-                  <summary>
-                    {prettyDate(d.date)} — {available.length}/{data.participants.length} (
-                    {Math.round((100 * available.length) / (data.participants.length || 1))}%)
-                  </summary>
-                  <p>Bisa: {available.map((p) => p.name).join(', ') || 'Belum ada'}</p>
-                  <p>
-                    Tidak bisa:{' '}
-                    {data.participants
-                      .filter((p) => !available.some((x) => x.id === p.id))
-                      .map((p) => p.name)
-                      .join(', ') || 'Tidak ada'}
-                  </p>
-                </details>
-              );
-            })}
+      {(data.event.show_participant_list || admin) && (
+        <section className="card stack-sm">
+          <div className="row between">
+            <h3>Sudah mengisi</h3>
+            <span className="pill">{data.participants.length} peserta</span>
+          </div>
+          {data.participants.length ? (
+            <div className="participant-list">
+              {[...data.participants]
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((p) => (
+                  <div className="row" key={p.id}>
+                    <span className="avatar">{p.name.slice(0, 1).toUpperCase()}</span>
+                    <span>{p.name}</span>
+                  </div>
+                ))}
+            </div>
+          ) : (
+            <p>Jawaban peserta akan muncul di sini.</p>
+          )}
         </section>
       )}
-      <section className="stack">
-        <h3>Pilihan tempat kumpul</h3>
-        <div className="grid grid-2">
-          {data.villas
-            .filter((v) => v.active)
-            .sort((x, y) => x.sort_order - y.sort_order)
-            .map((v) => (
-              <div key={v.id} className="stack-sm">
-                <VillaCard villa={v} images={data.images} />
-                <div className="row between">
-                  <strong>{a.villaCounts[v.id]} suara</strong>
-                  {admin && (
-                    <small>
+      {admin && (
+        <>
+          <section className="card stack">
+            <h3>Ketersediaan peserta</h3>
+            {[...data.dates]
+              .sort((x, y) => a.dateCounts[y.id] - a.dateCounts[x.id])
+              .map((d) => {
+                const available = data.participants.filter((p) =>
+                  data.availability.some(
+                    (v) => v.event_date_id === d.id && v.participant_id === p.id,
+                  ),
+                );
+                return (
+                  <details key={d.id}>
+                    <summary>
+                      {prettyDate(d.date)} · {available.length}/{data.participants.length} peserta
+                    </summary>
+                    <p className="mt-2">
+                      Bisa: {available.map((p) => p.name).join(', ') || 'Belum ada'}
+                    </p>
+                    <p>
+                      Tidak bisa:{' '}
+                      {data.participants
+                        .filter((p) => !available.some((x) => x.id === p.id))
+                        .map((p) => p.name)
+                        .join(', ') || 'Tidak ada'}
+                    </p>
+                  </details>
+                );
+              })}
+          </section>
+          <section className="stack">
+            <h3>Semua hasil voting villa</h3>
+            <div className="grid grid-2">
+              {data.villas
+                .filter((v) => v.active)
+                .sort((x, y) => a.villaCounts[y.id] - a.villaCounts[x.id])
+                .map((v) => (
+                  <div key={v.id} className="stack-sm">
+                    <VillaCard villa={v} images={data.images} />
+                    <strong>{a.villaCounts[v.id]} suara</strong>
+                    <small className="muted">
                       {data.participants
                         .filter((p) =>
                           data.votes.some(
@@ -99,30 +143,13 @@ export function PlanningAnalytics({ data, admin = false }: { data: Bundle; admin
                           ),
                         )
                         .map((p) => p.name)
-                        .join(', ')}
+                        .join(', ') || 'Belum ada pemilih'}
                     </small>
-                  )}
-                </div>
-              </div>
-            ))}
-        </div>
-      </section>
-      {(data.event.show_participant_list || admin) && (
-        <section className="card stack">
-          <h3 className="row">
-            <Users size={20} />
-            {data.participants.length} teman sudah ikut
-          </h3>
-          <div className="row">
-            {[...data.participants]
-              .sort((x, y) => x.name.localeCompare(y.name))
-              .map((p) => (
-                <span className="pill" key={p.id}>
-                  {p.name}
-                </span>
-              ))}
-          </div>
-        </section>
+                  </div>
+                ))}
+            </div>
+          </section>
+        </>
       )}
     </div>
   );

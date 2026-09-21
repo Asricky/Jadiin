@@ -27,11 +27,13 @@ export default async function Stage2({ params }: { params: Promise<{ slug: strin
   return (
     <main className="narrow section stack">
       <span className="eyebrow">{event.name}</span>
-      <h1>{event.status === 'COMPLETED' ? 'Sampai cerita berikutnya.' : 'It’s official! 🎉'}</h1>
-      <p>{p.name}, ini rencana final kita. Siap bikin kenangan bareng?</p>
+      <h1>{event.status === 'COMPLETED' ? 'Acara selesai' : 'Rencana final'}</h1>
+      <p>{p.name}, berikut tanggal, tempat, transport, dan biaya acara.</p>
       <section className="card card-lime">
         <small className="eyebrow">CATAT TANGGALNYA</small>
-        <h2 style={{ marginTop: 12 }}>{prettyDate(event.final_date!)}</h2>
+        <h2 style={{ marginTop: 12 }}>
+          {prettyDate(event.final_date!)} - {prettyDate(event.final_end_date!)}
+        </h2>
       </section>
       {villa && <VillaCard villa={villa} images={data.images} />}
       <section className="stack">
@@ -64,7 +66,7 @@ export default async function Stage2({ params }: { params: Promise<{ slug: strin
           ))}
       </section>
       <section className="card stack">
-        <span className="eyebrow">PATUNGAN UNTUK KEBERSAMAAN</span>
+        <span className="eyebrow">BIAYA PER PESERTA</span>
         <h2>
           {rupiah(event.cost_per_person)} <small className="muted">/ orang</small>
         </h2>

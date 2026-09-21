@@ -7,6 +7,8 @@ import { z } from 'zod';
 import { ArrowLeft, ArrowRight, Car, Bike, Footprints, Check } from 'lucide-react';
 import { stage1Schema } from '@/lib/validation';
 import { api, prettyDate } from '@/lib/utils';
+import { Input } from './ui/input';
+import { Progress } from './ui/progress';
 import { Button } from './ui/button';
 import { Notice } from './common';
 import { DateGrid } from './date-grid';
@@ -47,6 +49,9 @@ export function StageOne({
       dates: [],
       villa_id: '',
       vehicle_type: 'NONE',
+      vehicle_owner: '',
+      vehicle_driver: '',
+      vehicle_capacity: 5,
     },
   });
   const values = useWatch({ control }) as Values;
@@ -80,11 +85,11 @@ export function StageOne({
     return unsubscribe;
   }, [key, reset, initial, dates, subscribe]);
   const headings = [
-    'Kenalan dulu, yuk.',
+    'Data diri',
     'Kapan kamu bisa?',
     'Villa mana yang kamu suka?',
     'Berangkat naik apa?',
-    'Sudah pas semuanya?',
+    'Periksa jawaban',
   ];
   return (
     <form
@@ -103,11 +108,7 @@ export function StageOne({
       })}
     >
       <div>
-        <div className="stepper">
-          {headings.map((_, i) => (
-            <span key={i} className={`step ${i <= step ? 'done' : ''}`} />
-          ))}
-        </div>
+        <Progress value={(step + 1) * 20} className="mb-3 h-1" aria-label="Progres pengisian" />
         <small className="muted">
           Langkah {step + 1} dari 5 ·{' '}
           {['Data diri', 'Tanggal', 'Villa', 'Kendaraan', 'Review'][step]}
@@ -120,8 +121,8 @@ export function StageOne({
             [
               'Tanpa bikin akun. Cukup nama dan WhatsApp untuk organizer.',
               'Tap tanggal yang luang, atau geser untuk memilih sekaligus.',
-              'Pilih satu favoritmu. Klik lihat info untuk kenalan lebih dekat.',
-              'Data ini membantu organizer menyusun perjalanan, bukan otomatis jadi driver.',
+              'Lihat foto dan detailnya, lalu pilih satu villa.',
+              'Bawa kendaraan sendiri? Isi pemilik dan rencana drivernya.',
               'Cek dulu sebelum dikirim. Kamu bisa mengubahnya selama voting dibuka.',
             ][step]
           }
@@ -131,12 +132,12 @@ export function StageOne({
         <div className="card stack">
           <label className="field">
             Nama kamu
-            <input autoComplete="name" placeholder="Masukkan nama kamu" {...register('name')} />
+            <Input autoComplete="name" placeholder="Masukkan nama kamu" {...register('name')} />
             <small>{errors.name?.message}</small>
           </label>
           <label className="field">
             Nomor WhatsApp
-            <input
+            <Input
               type="tel"
               autoComplete="tel"
               placeholder="081234567890"
@@ -188,7 +189,12 @@ export function StageOne({
               key={v}
               className={`card row between ${values.vehicle_type === v ? 'card-lime' : ''}`}
               aria-pressed={values.vehicle_type === v}
-              onClick={() => setValue('vehicle_type', v)}
+              onClick={() => {
+                setValue('vehicle_type', v);
+                setValue('vehicle_capacity', v === 'MOTORCYCLE' ? 2 : 5);
+                if (!values.vehicle_owner) setValue('vehicle_owner', values.name);
+                if (!values.vehicle_driver) setValue('vehicle_driver', values.name);
+              }}
             >
               <span className="row">
                 <Icon size={25} />
@@ -197,6 +203,37 @@ export function StageOne({
               {values.vehicle_type === v && <Check size={19} />}
             </button>
           ))}
+          {values.vehicle_type !== 'NONE' && (
+            <div className="card stack-sm">
+              <h3>
+                {values.vehicle_type === 'CAR' ? 'Mobil' : 'Motor'}{' '}
+                {values.vehicle_owner || values.name}
+              </h3>
+              <label className="field">
+                Nama pemilik kendaraan
+                <Input {...register('vehicle_owner')} placeholder={values.name} maxLength={80} />
+                <small>{errors.vehicle_owner?.message}</small>
+              </label>
+              <label className="field">
+                Nama driver
+                <Input {...register('vehicle_driver')} placeholder={values.name} maxLength={80} />
+                <small>
+                  {errors.vehicle_driver?.message ||
+                    'Rencana awal; organizer akan mengonfirmasi saat menyusun transport.'}
+                </small>
+              </label>
+              <label className="field">
+                Kapasitas (termasuk driver)
+                <Input
+                  type="number"
+                  min={1}
+                  max={values.vehicle_type === 'MOTORCYCLE' ? 2 : 50}
+                  {...register('vehicle_capacity')}
+                />
+                <small>{errors.vehicle_capacity?.message}</small>
+              </label>
+            </div>
+          )}
         </div>
       )}
       {step === 4 && (
@@ -221,7 +258,11 @@ export function StageOne({
           </div>
           <div>
             <small className="muted">KENDARAAN</small>
-            <p>{{ CAR: 'Mobil', MOTORCYCLE: 'Motor', NONE: 'Tidak ada' }[values.vehicle_type]}</p>
+            <p>
+              {{ CAR: 'Mobil', MOTORCYCLE: 'Motor', NONE: 'Tidak ada' }[values.vehicle_type]}{' '}
+              {values.vehicle_type !== 'NONE' &&
+                `${values.vehicle_owner || values.name} · Driver: ${values.vehicle_driver || values.name} · ${values.vehicle_capacity} orang`}
+            </p>
           </div>
         </div>
       )}
@@ -242,11 +283,11 @@ export function StageOne({
             type="button"
             disabled={checking}
             onClick={async () => {
-              const fields: ('name' | 'whatsapp' | 'dates' | 'villa_id' | 'vehicle_type')[][] = [
+              const fields: (keyof Values)[][] = [
                 ['name', 'whatsapp'],
                 ['dates'],
                 ['villa_id'],
-                ['vehicle_type'],
+                ['vehicle_type', 'vehicle_owner', 'vehicle_driver', 'vehicle_capacity'],
               ];
               if (!(await trigger(fields[step]))) return;
               setChecking(true);

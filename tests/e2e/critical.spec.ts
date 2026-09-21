@@ -1,3 +1,4 @@
+import { zipSync } from 'fflate';
 import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import { randomBytes, createHmac } from 'node:crypto';
@@ -21,7 +22,7 @@ test('organizer can register through the UI', async ({ page }) => {
     await page.getByLabel('Konfirmasi password').fill(password);
     await page.getByRole('button', { name: 'Buat akun', exact: true }).click();
     await expect(page).toHaveURL(/admin\/events$/);
-    await expect(page.getByRole('heading', { name: /Halo, New/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Acara kamu' })).toBeVisible();
   } finally {
     const { data } = await db.auth.admin.listUsers();
     const user = data.users.find((u) => u.email === email);
@@ -66,23 +67,52 @@ test('real database: admin → participant → transport → private proof → v
     date.setDate(date.getDate() + 30);
     const dateText = date.toISOString().slice(0, 10);
     await page.getByLabel('Dari tanggal').fill(dateText);
-    await page.getByLabel('Sampai tanggal').fill(dateText);
+    const endDate = new Date(date);
+    endDate.setDate(endDate.getDate() + 1);
+    const endText = endDate.toISOString().slice(0, 10);
+    await page.getByLabel('Sampai tanggal').fill(endText);
     await page.getByRole('button', { name: 'Tambahkan tanggal' }).click();
     await page.getByRole('button', { name: 'Simpan tanggal' }).click();
     await page.getByLabel('Nama villa', { exact: true }).fill('Villa E2E');
     await page.getByLabel('Harga per malam').fill('2000000');
+    await expect(page.getByLabel('Harga per malam')).toHaveValue('2.000.000');
+    await page
+      .getByLabel('Fasilitas (satu fasilitas per baris)')
+      .fill('Kolam renang\nArea BBQ\nWiFi');
+    await page.getByLabel('Alamat', { exact: true }).fill('Jl. Pengujian No. 10, Bandung');
     await page.getByLabel('Kapasitas orang').fill('10');
     await page.getByLabel('Google Maps URL').fill('https://maps.google.com/');
     await page.getByRole('button', { name: 'Simpan villa', exact: true }).click();
-    const mediaCommit = page.waitForResponse(
-      (response) =>
-        response.url().endsWith('/api/uploads') &&
-        response.request().postDataJSON()?.action === 'complete',
+    const jpeg = Buffer.from(
+      await page.evaluate(() => {
+        const c = document.createElement('canvas');
+        c.width = 8;
+        c.height = 8;
+        const ctx = c.getContext('2d')!;
+        ctx.fillStyle = '#eab308';
+        ctx.fillRect(0, 0, 8, 8);
+        return c.toDataURL('image/jpeg').split(',')[1];
+      }),
+      'base64',
     );
-    await page
-      .getByLabel('Foto', { exact: true })
-      .setInputFiles({ name: 'villa.png', mimeType: 'image/png', buffer: png });
-    expect((await mediaCommit).ok()).toBe(true);
+    const archive = zipSync({
+      'photos/room.JPEG': new Uint8Array(jpeg),
+      'notes.txt': new TextEncoder().encode('not a photo'),
+    });
+    await page.getByLabel('Foto', { exact: true }).setInputFiles([
+      { name: 'villa.png', mimeType: 'image/png', buffer: png },
+      { name: 'garden.jpg', mimeType: 'image/jpeg', buffer: jpeg },
+      { name: 'villa.zip', mimeType: 'application/zip', buffer: Buffer.from(archive) },
+    ]);
+    await expect(page.getByText('3 dari 3 foto berhasil diunggah')).toBeVisible();
+    await expect(page.getByText('1 file non-foto di dalam ZIP dilewati.')).toBeVisible();
+    await expect(page.getByRole('img', { name: /Berhasil diunggah:/ })).toHaveCount(3);
+    await page.getByRole('button', { name: 'Jadikan foto 2 cover', exact: true }).click();
+    await expect(
+      page.getByRole('button', { name: 'Jadikan foto 2 cover', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    await page.screenshot({ path: 'test-results/revision-upload-desktop.png', fullPage: true });
+    const starredSrc = await page.getByAltText('Foto villa 2', { exact: true }).getAttribute('src');
     await page.getByRole('button', { name: 'Selesai, kembali ke acara' }).click();
     await expect(page).toHaveURL(/admin\/events\/[a-f0-9-]+$/);
     eventId = page.url().split('/').pop()!;
@@ -90,6 +120,8 @@ test('real database: admin → participant → transport → private proof → v
       dialog.accept(dialog.type() === 'prompt' ? 'Bukti kurang jelas' : undefined),
     );
     await page.getByRole('button', { name: 'Publish acara', exact: true }).click();
+    await page.getByRole('button', { name: 'Ya, ubah fase' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
     await expect(page.getByText('Voting dibuka', { exact: true })).toBeVisible();
     participantContext = await browser.newContext({
       baseURL: appUrl,
@@ -104,22 +136,98 @@ test('real database: admin → participant → transport → private proof → v
     await participant.getByLabel('Nama kamu').fill('Teman E2E');
     await participant.getByLabel('Nomor WhatsApp').fill('081234567890');
     await participant.getByRole('button', { name: 'Lanjut', exact: true }).click();
-    await participant.getByRole('button', { name: dateText, exact: true }).tap();
+    const startCell = await participant
+      .getByRole('button', { name: dateText, exact: true })
+      .boundingBox();
+    const endCell = await participant
+      .getByRole('button', { name: endText, exact: true })
+      .boundingBox();
+    await participant.mouse.move(
+      startCell!.x + startCell!.width / 2,
+      startCell!.y + startCell!.height / 2,
+    );
+    await participant.mouse.down();
+    await participant.mouse.move(
+      endCell!.x + endCell!.width / 2,
+      endCell!.y + endCell!.height / 2,
+      { steps: 5 },
+    );
+    await participant.mouse.up();
+    await expect(participant.getByRole('button', { name: dateText, exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expect(participant.getByRole('button', { name: endText, exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    // Real touch drag toggles the whole range off, then on again on a phone viewport.
+    const touch = await participantContext.newCDPSession(participant);
+    for (let i = 0; i < 2; i++) {
+      await touch.send('Input.dispatchTouchEvent', {
+        type: 'touchStart',
+        touchPoints: [
+          { x: startCell!.x + startCell!.width / 2, y: startCell!.y + startCell!.height / 2 },
+        ],
+      });
+      await touch.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [{ x: endCell!.x + endCell!.width / 2, y: endCell!.y + endCell!.height / 2 }],
+      });
+      await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await expect(participant.getByRole('button', { name: endText, exact: true })).toHaveAttribute(
+        'aria-pressed',
+        i === 0 ? 'false' : 'true',
+      );
+    }
+    await touch.detach();
+    await participant.screenshot({
+      path: 'test-results/revision-dates-mobile.png',
+      fullPage: true,
+    });
     await participant.getByRole('button', { name: 'Lanjut', exact: true }).click();
+    await expect(participant.getByAltText('Cover Villa E2E')).toHaveAttribute('src', starredSrc!);
     await participant.getByRole('button', { name: 'Lihat info' }).click();
     await expect(participant.getByRole('dialog')).toContainText('Villa E2E');
+    await expect(participant.getByRole('dialog')).toContainText('Area BBQ');
+    await expect(participant.getByRole('dialog')).toContainText('Jl. Pengujian No. 10');
+    await expect(participant.getByRole('link', { name: 'Buka Google Maps' })).toHaveAttribute(
+      'href',
+      'https://maps.google.com/',
+    );
+    await participant.screenshot({
+      path: 'test-results/revision-villa-modal-mobile.png',
+      fullPage: true,
+    });
     await participant.getByRole('button', { name: 'Tutup', exact: true }).click();
     await participant.getByRole('button', { name: 'Pilih villa' }).click();
     await participant.getByRole('button', { name: 'Lanjut', exact: true }).click();
     await participant.getByRole('button', { name: 'Mobil', exact: true }).click();
+    await expect(participant.getByLabel('Nama pemilik kendaraan')).toHaveValue('Teman E2E');
+    await expect(participant.getByLabel('Nama driver')).toHaveValue('Teman E2E');
     await participant.getByRole('button', { name: 'Lanjut', exact: true }).click();
-    await expect(participant.getByRole('heading', { name: 'Sudah pas semuanya?' })).toBeVisible();
+    await expect(participant.getByRole('heading', { name: 'Periksa jawaban' })).toBeVisible();
     expect((await db.from('participants').select('id').eq('event_id', eventId)).data).toEqual([]);
     await participant.getByRole('button', { name: 'Kirim jawaban' }).click();
     await expect(participant).toHaveURL(/dashboard$/);
-    await expect(participant.getByRole('heading', { name: /Makasih/ })).toBeVisible();
+    await expect(participant.getByRole('heading', { name: /Terima kasih/ })).toBeVisible();
     const { data: p } = await db.from('participants').select('*').eq('event_id', eventId).single();
     expect(p.whatsapp).toBe('6281234567890');
+    expect(p.vehicle_owner).toBe('Teman E2E');
+    expect(p.vehicle_driver).toBe('Teman E2E');
+    expect(p.vehicle_capacity).toBe(5);
+    await expect(
+      participant.getByText('1 dari 1 peserta bisa di kedua hari. 2 hari, 1 malam.'),
+    ).toBeVisible();
+    await expect(participant.getByAltText('Cover Villa E2E')).toHaveAttribute('src', starredSrc!);
+    await expect(participant.getByRole('heading', { name: 'Sudah mengisi' })).toBeVisible();
+    await participant.screenshot({
+      path: 'test-results/revision-results-mobile.png',
+      fullPage: true,
+    });
+    expect(
+      await participant.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+    ).toBe(true);
     const cookies = await participantContext.cookies();
     const cookie = cookies.find((c) => c.name === `mp_${eventId}`)!;
     expect(cookie.httpOnly).toBe(true);
@@ -152,10 +260,16 @@ test('real database: admin → participant → transport → private proof → v
     await outsiderPage.goto(`/e/${slug}/p/${cookie.value}`);
     await outsiderPage.getByRole('button', { name: 'Buka jawaban saya' }).click();
     await expect(outsiderPage).toHaveURL(/dashboard$/);
-    await expect(outsiderPage.getByRole('heading', { name: /Makasih, Teman E2E/ })).toBeVisible();
+    await expect(
+      outsiderPage.getByRole('heading', { name: /Terima kasih, Teman E2E/ }),
+    ).toBeVisible();
     await outsider.close();
     await page.reload();
+    await expect(page.getByRole('heading', { name: name, exact: true })).toBeVisible();
+    await page.screenshot({ path: 'test-results/revision-admin-desktop.png', fullPage: true });
     await page.getByRole('button', { name: 'Tutup Stage 1' }).click();
+    await page.getByRole('button', { name: 'Ya, ubah fase' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
     await expect(page.getByText('Sedang difinalisasi', { exact: true })).toBeVisible();
     const closed = await participant.request.post(`/api/events/${slug}/stage-1`, {
       headers: { Origin: appUrl },
@@ -169,10 +283,11 @@ test('real database: admin → participant → transport → private proof → v
     });
     expect(closed.ok()).toBe(false);
     await page.getByRole('link', { name: 'Transport', exact: true }).click();
-    await page.getByLabel('Label', { exact: true }).fill('Mobil E2E');
-    await page.getByLabel('Driver', { exact: true }).selectOption(p.id);
+    await page.getByLabel('Pemilik', { exact: true }).selectOption(p.id);
+    await expect(page.getByLabel('Label', { exact: true })).toHaveValue('Mobil Teman E2E');
+    await expect(page.getByLabel('Driver', { exact: true })).toHaveValue(p.id);
     await page.getByRole('button', { name: 'Tambahkan kendaraan' }).click();
-    await expect(page.getByRole('heading', { name: /Mobil E2E/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Mobil Teman E2E/ })).toBeVisible();
     await page.getByRole('link', { name: 'Ringkasan', exact: true }).click();
     for (let i = 0; i < 3; i++)
       await page.getByRole('button', { name: 'Lanjut', exact: true }).click();
@@ -184,10 +299,14 @@ test('real database: admin → participant → transport → private proof → v
     await page.getByRole('button', { name: 'Simpan keputusan final' }).click();
     await expect(page.getByText('Perubahan tersimpan.')).toBeVisible();
     await page.getByRole('button', { name: 'Publish Stage 2', exact: true }).click();
+    await page.getByRole('button', { name: 'Ya, ubah fase' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
     await expect(page.getByText('Siap berangkat', { exact: true })).toBeVisible();
     await participant.reload();
     await expect(participant).toHaveURL(/stage-2$/);
-    await expect(participant.getByRole('heading', { name: 'It’s official! 🎉' })).toBeVisible();
+    await expect(
+      participant.getByRole('heading', { name: 'Rencana final', exact: true }),
+    ).toBeVisible();
     const oversize = await participant.request.post('/api/uploads', {
       headers: { Origin: appUrl },
       data: {
@@ -265,11 +384,11 @@ test('real database: admin → participant → transport → private proof → v
     await participant.getByRole('button', { name: 'Buka jawaban saya' }).click();
     await expect(participant).toHaveURL(/stage-2$/);
     await page.getByRole('button', { name: 'Selesaikan acara', exact: true }).click();
-    await expect(page.getByText('Selesai', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Ya, ubah fase' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.locator('.badge-COMPLETED')).toBeVisible();
     await participant.goto(`/e/${slug}/stage-2`);
-    await expect(
-      participant.getByRole('heading', { name: 'Sampai cerita berikutnya.' }),
-    ).toBeVisible();
+    await expect(participant.getByRole('heading', { name: 'Acara selesai' })).toBeVisible();
     await expect(participant.getByLabel('Bukti pembayaran', { exact: true })).toHaveCount(0);
     const lockedUpload = await participant.request.post('/api/uploads', {
       headers: { Origin: appUrl },
@@ -282,6 +401,28 @@ test('real database: admin → participant → transport → private proof → v
       },
     });
     expect(lockedUpload.ok()).toBe(false);
+    await page.getByRole('button',{name:'Arsipkan acara',exact:true}).click();
+    await page.getByRole('button',{name:'Ya, ubah fase'}).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.locator('.badge-ARCHIVED')).toBeVisible();
+    for (const target of ['Selesai', 'Pembayaran', 'Finalisasi', 'Voting', 'Draft']) {
+      await page.getByRole('button', { name: `Kembali ke ${target}`, exact: true }).click();
+      await page.getByRole('button', { name: 'Ya, ubah fase' }).click();
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+    }
+    const { data: retained } = await db.from('participants').select('id').eq('event_id', eventId);
+    expect(retained).toHaveLength(1);
+    expect(
+      (await db.from('payments').select('status').eq('event_id', eventId)).data?.[0].status,
+    ).toBe('VERIFIED');
+    expect(
+      (await db.from('event_phase_history').select('id').eq('event_id', eventId)).data,
+    ).toHaveLength(10);
+    expect(
+      (await db.from('events').select('final_end_date').eq('id', eventId).single()).data
+        ?.final_end_date,
+    ).toBe(endText);
     expect(consoleErrors).toEqual([]);
   } finally {
     await participantContext?.close();
@@ -348,7 +489,7 @@ test('RLS, RPC isolation, transaction rollback, capacity and token rotation', as
     expect(
       (await a.from('events').update({ status: 'STAGE_2_OPEN' }).eq('id', e)).error,
     ).toBeTruthy();
-    await act(a, e, 'dates', { dates: ['2027-01-01'] });
+    await act(a, e, 'dates', { dates: ['2027-01-01', '2027-01-02'] });
     const { data: vid } = await act(a, e, 'villa', {
       name: 'Security villa',
       description: '',
@@ -403,6 +544,9 @@ test('RLS, RPC isolation, transaction rollback, capacity and token rotation', as
       ids.push(pid);
     }
     expect((await b.from('participants').select('*').eq('event_id', e)).data).toEqual([]);
+    expect((await b.from('event_phase_history').select('*').eq('event_id',e)).data).toEqual([]);
+    expect((await a.from('event_phase_history').select('*').eq('event_id',e)).data).toHaveLength(1);
+    expect((await act(b,e,'status',{status:'DRAFT'})).error).toBeTruthy();
     await act(a, e, 'status', { status: 'STAGE_1_CLOSED' });
     const { data: gid, error: groupError } = await act(a, e, 'group', {
       type: 'MOTORCYCLE',

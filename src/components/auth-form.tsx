@@ -1,4 +1,5 @@
 'use client';
+import { Input } from './ui/input';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
@@ -38,34 +39,35 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' | 'forgot' | 're
       })}
     >
       <div>
-        <span className="eyebrow">MULAI CERITA BARU</span>
         <h2 style={{ marginTop: 10 }}>
           {mode === 'register'
-            ? 'Kenalan dulu, yuk.'
+            ? 'Buat akun organizer'
             : mode === 'login'
-              ? 'Selamat datang kembali.'
+              ? 'Masuk ke workspace'
               : mode === 'forgot'
                 ? 'Lupa password?'
                 : 'Password baru'}
         </h2>
-        <p style={{ fontSize: 13, marginTop: 10 }}>Satu akun untuk semua rencana serumu.</p>
+        <p style={{ fontSize: 13, marginTop: 10 }}>
+          Kelola acara dan jawaban peserta dari satu tempat.
+        </p>
       </div>
       {mode === 'register' && (
         <label className="field">
           Nama lengkap
-          <input autoComplete="name" required {...register('name')} />
+          <Input autoComplete="name" required {...register('name')} />
         </label>
       )}
       {mode !== 'reset' && (
         <label className="field">
           Email
-          <input type="email" autoComplete="email" required {...register('email')} />
+          <Input type="email" autoComplete="email" required {...register('email')} />
         </label>
       )}
       {mode !== 'forgot' && (
         <label className="field">
           Password
-          <input
+          <Input
             type="password"
             autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
             minLength={8}
@@ -77,7 +79,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' | 'forgot' | 're
       {(mode === 'register' || mode === 'reset') && (
         <label className="field">
           Konfirmasi password
-          <input
+          <Input
             type="password"
             autoComplete="new-password"
             minLength={8}

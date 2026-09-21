@@ -12,6 +12,7 @@ export interface Event {
   stage2_deadline: string | null;
   final_villa_id: string | null;
   final_date: string | null;
+  final_end_date: string | null;
   cost_per_person: number | null;
   bank_name: string | null;
   bank_account_number: string | null;
@@ -52,6 +53,9 @@ export interface Participant {
   name: string;
   whatsapp: string;
   vehicle_type: 'CAR' | 'MOTORCYCLE' | 'NONE';
+  vehicle_owner: string | null;
+  vehicle_driver: string | null;
+  vehicle_capacity: number | null;
   stage1_submitted_at: string;
   stage2_submitted_at: string | null;
 }

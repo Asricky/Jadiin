@@ -25,7 +25,9 @@ export async function session(eventId: string) {
   const hash = hashToken(token);
   const { data, error } = await service()
     .from('participants')
-    .select('id,name,whatsapp,vehicle_type,stage2_submitted_at')
+    .select(
+      'id,name,whatsapp,vehicle_type,vehicle_owner,vehicle_driver,vehicle_capacity,stage2_submitted_at',
+    )
     .eq('event_id', eventId)
     .eq('access_token_hash', hash)
     .maybeSingle();

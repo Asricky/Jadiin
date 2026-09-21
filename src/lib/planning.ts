@@ -1,3 +1,4 @@
+import { addDays, format, parseISO } from 'date-fns';
 import type { Bundle } from '@/types/domain';
 export function analytics(data: Bundle) {
   const dateCounts = Object.fromEntries(
@@ -11,7 +12,29 @@ export function analytics(data: Bundle) {
     0,
     ...data.villas.filter((v) => v.active).map((v) => villaCounts[v.id]),
   );
+  const dates = [...data.dates].sort((a, b) => a.date.localeCompare(b.date));
+  const datePairs = dates
+    .flatMap((start) => {
+      const end = dates.find(
+        (d) => d.date === format(addDays(parseISO(start.date), 1), 'yyyy-MM-dd'),
+      );
+      if (!end) return [];
+      const first = new Set(
+        data.availability.filter((a) => a.event_date_id === start.id).map((a) => a.participant_id),
+      );
+      const both = new Set(
+        data.availability
+          .filter((a) => a.event_date_id === end.id && first.has(a.participant_id))
+          .map((a) => a.participant_id),
+      );
+      return [{ start, end, count: both.size, participantIds: [...both] }];
+    })
+    .sort((a, b) => b.count - a.count || a.start.date.localeCompare(b.start.date));
+  const maxPair = datePairs[0]?.count || 0;
   return {
+    datePairs,
+    leadingPairs: datePairs.filter((p) => maxPair > 0 && p.count === maxPair),
+    maxPair,
     dateCounts,
     villaCounts,
     maxDate,

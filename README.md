@@ -48,7 +48,7 @@ npx supabase link --project-ref YOUR_PROJECT_REF
 npx supabase db push
 ```
 
-Migrasi ada di `supabase/migrations/`. Untuk mereset **database lokal** dan menerapkan ulang semua migrasi: `npx supabase db reset`, lalu `npm run seed`. Reset menghapus data lokal. Alternatif hosted: jalankan file SQL sesuai urutan melalui SQL Editor.
+Migrasi ada di `supabase/migrations/`. Untuk mereset **database lokal** dan menerapkan ulang semua migrasi: `npx supabase db reset`, lalu `npm run seed`. Reset menghapus data lokal. Untuk upgrade tanpa menghapus data lokal, jalankan `npx supabase migration up --local`. Alternatif hosted: jalankan file SQL sesuai urutan melalui SQL Editor. Migrasi `202609210003_planning_revision.sql` menambah informasi kendaraan, tanggal pulang otomatis, riwayat fase ber-RLS, serta perpindahan fase dua arah. Terapkan migrasi ini sebelum menjalankan versi aplikasi terbaru.
 
 Di Authentication → URL Configuration, set Site URL ke origin Vercel dan tambahkan redirect `/auth/callback` dan `/auth/callback?next=/reset-password`. Aktifkan konfirmasi email dan konfigurasi SMTP production. Registrasi lokal mengikuti pengaturan `supabase/config.toml`; email reset dapat dibaca lewat inbox lokal. Profil otomatis dibuat melalui trigger Auth.
 
@@ -56,7 +56,7 @@ Di Authentication → URL Configuration, set Site URL ke origin Vercel dan tamba
 
 - Semua tabel domain mengaktifkan RLS. Organizer hanya dapat membaca baris miliknya melalui `events.owner_id = auth.uid()`; child tables memakai `owns_event(event_id)`.
 - Tidak ada akses anonymous ke tabel bisnis atau mutation RPC. Organizer diberi SELECT dan RPC transaksi, **bukan** direct INSERT/UPDATE/DELETE. Ini menjaga validasi lifecycle meskipun seseorang memakai REST Supabase langsung.
-- `admin_action` memakai `auth.uid()`, memvalidasi ownership, dan mengunci baris event untuk serialisasi perubahan. Status hanya dapat berpindah sesuai lifecycle. Publikasi Stage 2 membutuhkan final villa/date, bank, biaya, dan transport semua participant.
+- `admin_action` memakai `auth.uid()`, memvalidasi ownership, dan mengunci baris event untuk serialisasi perubahan. Status dapat maju atau mundur satu fase dalam satu transaksi; setiap perubahan dicatat di `event_phase_history` yang hanya terbaca oleh pemilik event. Tidak bisa melompati fase. Publikasi Stage 2 membutuhkan final villa/date, bank, biaya, dan transport semua participant.
 - Foreign key komposit memastikan tanggal, vote, kendaraan, dan participant berasal dari event yang sama. Unique constraints mencegah nama ganda, multiple votes, multiple transport assignments, dan driver ganda. Kapasitas kendaraan diperiksa dalam transaksi yang mengunci event.
 - Submit Stage 1 melalui Route Handler dengan Zod, status/deadline, rate limit database, kemudian RPC atomic untuk participant + availability + vote. Update membutuhkan token yang sesuai. Mengetahui nama tidak memberi akses.
 - Token participant random 256 bit, disimpan sebagai HMAC-SHA256, cookie HttpOnly/SameSite=Lax/Secure di production, berlaku 180 hari di browser. Link recovery memakai token yang sama dan tombol konfirmasi; tidak ada mutasi sesi lewat GET. Reset akses organizer mencabut token lama.
@@ -72,7 +72,9 @@ Migrasi membuat dua bucket:
 | `villa-media`    | Public (foto villa/cover acara)                 | Signed upload setelah ownership admin diverifikasi   |
 | `payment-proofs` | Private; owner RLS atau signed preview 60 detik | Signed upload setelah token participant diverifikasi |
 
-Semua upload dibatasi JPG/PNG/WebP, maksimal **5 MB**, pada Zod dan konfigurasi bucket. SVG/PDF tidak diaktifkan. Server menciptakan path random yang terikat event/participant dan upload intent 10 menit. Browser mengunggah langsung ke Storage memakai `uploadToSignedUrl`; service key tidak pernah dikirim ke browser. Signed upload tidak mengizinkan overwrite. Setelah upload, server membaca object maksimal 5 MB, memeriksa magic bytes dan ukuran aktual terhadap intent, lalu RPC mengunci event/intent, memeriksa status, ownership/token, dan mencatat payment secara atomic. Signed URL Supabase bisa hidup lebih lama daripada intent, tetapi intent kedaluwarsa tidak bisa menghasilkan payment record.
+Semua upload dibatasi JPG/JPEG/PNG/WebP, maksimal **5 MB**, pada Zod dan konfigurasi bucket. SVG/PDF tidak diaktifkan. Server menciptakan path random yang terikat event/participant dan upload intent 10 menit. Browser mengunggah langsung ke Storage memakai `uploadToSignedUrl`; service key tidak pernah dikirim ke browser. Signed upload tidak mengizinkan overwrite. Setelah upload, server membaca object maksimal 5 MB, memeriksa magic bytes dan ukuran aktual terhadap intent, lalu RPC mengunci event/intent, memeriksa status, ownership/token, dan mencatat payment secara atomic. Signed URL Supabase bisa hidup lebih lama daripada intent, tetapi intent kedaluwarsa tidak bisa menghasilkan payment record.
+
+Galeri menerima beberapa foto sekaligus dan ZIP. ZIP diekstrak di memori browser menggunakan fflate; hanya JPG/JPEG/PNG/WebP diambil. Batas: 30 foto per batch, ZIP 25 MB, hasil ekstraksi total 100 MB, maksimal 300 entri, dan 5 MB per foto. Path traversal, file rusak, dan isi bukan gambar ditolak. ZIP tidak dikirim ke server; setiap foto tetap melewati validasi server dan signed upload yang sama. UI menampilkan status serta preview sukses per foto, lalu admin dapat memberi bintang untuk memilih cover. Foto pertama menjadi cover awal. Fasilitas diisi satu per baris dan harga memakai pemisah ribuan titik; database menyimpan angka.
 
 Status pembayaran: belum submit → pending → verified/rejected. Upload ulang hanya untuk rejected. Bukti pending/verified tidak bisa ditimpa. Rejection note wajib diisi; preview owner memakai signed URL singkat. File orphan dari upload yang ditinggalkan dan bukti lama tidak otomatis dihapus; atur retensi/pembersihan bucket sesuai kebutuhan operasional. Menghapus event menghapus baris domain; object Storage perlu dibersihkan terpisah.
 
@@ -90,15 +92,15 @@ Untuk project hosted **khusus demo**, set `ALLOW_REMOTE_SEED=true` dan password 
 ## Flow penggunaan
 
 1. Register/login organizer, buat event melalui wizard nama → tanggal → villa; upload cover/galeri, tambah pilihan villa jika perlu.
-2. Publish Stage 1, salin link atau gunakan QR. Participant mengisi nama/WA, kalender tap/paint, vote villa, kendaraan, dan review.
-3. Participant mendapat sesi dan dashboard sementara. Simpan link akses pribadi; organizer bisa mencabut/mengganti link.
+2. Publish Stage 1, salin link atau gunakan QR. Participant mengisi nama/WA, kalender tap/drag (mouse maupun sentuhan), vote villa dengan modal foto/detail, kendaraan beserta pemilik/driver/kapasitas, dan review.
+3. Participant mendapat sesi dan dashboard sementara: kalender kecil, pasangan dua tanggal berurutan dengan peserta terbanyak yang hadir di **kedua hari**, preview villa teratas, dan daftar pengisi. Hasil imbang tetap ditampilkan sebagai imbang; tanggal awal paling dekat ditampilkan lebih dulu. Simpan link akses pribadi; organizer bisa mencabut/mengganti link.
 4. Organizer melihat agregat/tie, daftar peserta, rincian tanggal dan voter, lalu menutup Stage 1.
-5. Susun kendaraan: kapasitas termasuk driver; motor maksimal dua; mandiri satu. Drag desktop atau dropdown mobile. Driver tidak otomatis berasal dari kepemilikan kendaraan; peringatan ditampilkan jika memilih driver tanpa kendaraan.
-6. Wizard finalisasi menetapkan villa/date/cost/bank. Publish Stage 2 setelah semua peserta ditempatkan.
+5. Susun kendaraan: kapasitas termasuk driver; motor maksimal dua; mandiri satu. Drag desktop atau dropdown mobile. Memilih pemilik mengisi label "Mobil/Motor [pemilik]", kapasitas, dan usulan driver dari form peserta. Usulan driver dicocokkan ke nama peserta yang belum ditempatkan; jika tidak cocok, admin wajib memilih driver. Nama pemilik/driver bukan kredensial keamanan. Peringatan ditampilkan jika memilih driver tanpa kendaraan.
+6. Wizard finalisasi menetapkan villa, dua tanggal berurutan (2 hari 1 malam), biaya, dan bank. Tanggal pulang dihitung oleh PostgreSQL dari tanggal berangkat + 1 hari. Publish Stage 2 setelah semua peserta ditempatkan.
 7. Participant melihat rencana dan kendaraan, melakukan transfer, mengunggah bukti, dan melihat thank-you/status. Organizer verify/reject dengan alasan; rejected boleh upload ulang.
-8. Complete mengunci form; organizer bisa membuka Stage 2 kembali atau mengarsipkan. Delete perlu mengetik nama event.
+8. Complete mengunci form. Timeline menampilkan fase saat ini dan tombol kembali ke fase sebelumnya, termasuk dari Arsip. Jawaban, transport, dan pembayaran dipertahankan. Deadline voting yang sudah lewat dikosongkan saat voting dibuka kembali. Biaya tidak bisa diubah setelah ada pembayaran, agar jumlah pembayaran terdahulu tetap konsisten. Delete perlu mengetik nama event.
 
-Keputusan MVP: tanggal hanya bisa diubah saat DRAFT agar jawaban existing tidak hilang; villa yang sudah mendapat vote tidak bisa dihapus (nonaktifkan). Tidak ada jam availability, realtime subscription, atau PDF. Draft Stage 1 disimpan lokal di browser dan dihapus setelah submit; data produksi tetap di Supabase.
+Keputusan MVP: tanggal hanya bisa diubah saat DRAFT; ID tanggal yang tetap ada dipertahankan dan tanggal yang sudah dijawab peserta tidak dapat dihapus; villa yang sudah mendapat vote tidak bisa dihapus (nonaktifkan). Tidak ada jam availability, realtime subscription, atau PDF. Draft Stage 1 disimpan lokal di browser dan dihapus setelah submit; data produksi tetap di Supabase.
 
 ## Tests dan production build
 
@@ -111,7 +113,7 @@ npm run test:e2e
 npm run build
 ```
 
-Playwright membaca `.env.local`, membutuhkan Supabase hidup dan migrasi terpasang, dan membuat data khusus test. Tidak ada mocks pada critical flow. Test mencakup login, wizard, publish, participant mobile, penolakan nama ganda, submit terkunci, transport, finalisasi, private upload, payment verification, completion, isolasi RLS/RPC, rollback lintas-event, dan race kapasitas kendaraan. Jangan arahkan test ke production.
+Playwright membaca `.env.local`, membutuhkan Supabase hidup dan migrasi terpasang, dan membuat data khusus test. Tidak ada mocks pada critical flow. Test mencakup login, wizard, publish, participant mobile, penolakan nama ganda, submit terkunci, transport, finalisasi, private upload, payment verification, completion, isolasi RLS/RPC, rollback lintas-event, race kapasitas kendaraan, upload campuran PNG/JPG/ZIP, preview sukses, cover berbintang, drag mouse/sentuhan, fasilitas per baris, prediksi dua hari, auto-fill kendaraan, serta kembali fase tanpa kehilangan pembayaran. Unit test memeriksa irisan ketersediaan lintas bulan, hasil imbang, batas ZIP dan path traversal. Jangan arahkan test ke production.
 
 Untuk menguji build production: jalankan `npm run build`, lalu `E2E_PRODUCTION=true npm run test:e2e` (PowerShell: `$env:E2E_PRODUCTION='true'; npm run test:e2e`). Hentikan server dev lebih dulu agar Playwright menjalankan production server. Workflow GitHub Actions menyiapkan Supabase lokal dan menjalankan seluruh pemeriksaan.
 
@@ -127,3 +129,7 @@ Jika download browser dibatasi, gunakan Chrome terpasang: set `PLAYWRIGHT_CHANNE
 6. Verifikasi register/email, event baru, participant, upload, dan signed preview pada domain final.
 
 Tidak ada persistent filesystem, server terpisah, worker berkepanjangan, atau VPS pada production. Semua data, session hash, rate counters, dan file berada di Supabase. Docker/seed/testing tidak dijalankan di Vercel. Deployment Vercel dan provisioning hosted Supabase memerlukan akun/credential pemilik masing-masing.
+
+## Struktur repository
+
+`src/app` berisi halaman App Router dan Route Handler; `src/components/ui` berisi primitive shadcn/Radix yang dipakai; `src/components` berisi form dan tampilan produk; `src/lib` berisi validasi, akses Supabase, sesi, dan perhitungan; `supabase/migrations` adalah schema/version history; `scripts` hanya untuk setup dan seed lokal; `tests` berisi unit dan browser test. File instruksi agen generator dihapus dan `agentRules: false` mencegah Next.js membuatnya ulang. Build output, laporan test, cache, dependencies, dan secrets tidak masuk Git.

@@ -1,10 +1,12 @@
-'use client';
+﻿'use client';
 /* eslint-disable @next/next/no-img-element */
 import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowUpRight, Plus, Trees, CalendarDays, Users, ArrowRight, Sparkles } from 'lucide-react';
+import { ArrowUpRight, Plus, CalendarDays, Users } from 'lucide-react';
 import { type Event, statusLabel } from '@/types/domain';
 import { mediaUrl, prettyDate } from '@/lib/utils';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
+import { Button } from './ui/button';
 export function EventsList({
   events,
   name,
@@ -21,125 +23,82 @@ export function EventsList({
         : e.status === 'ARCHIVED',
   );
   return (
-    <main className="container">
-      <section className="hero grid grid-2 dashboard-hero" style={{ alignItems: 'center' }}>
-        <div className="stack">
-          <span className="eyebrow">RUANG RENCANA KAMU</span>
-          <h1>
-            Halo, {name} <span style={{ fontSize: 30 }}>☀</span>
-            <br />
-            Ada cerita apa berikutnya?
-          </h1>
-          <p>
-            Kumpulkan teman, pilih tempat, dan wujudkan rencana. Momen seru berikutnya dimulai dari
-            sini.
-          </p>
-          <div>
-            <Link className="button" href="/admin/events/new">
-              <Plus size={17} /> Buat acara baru
-            </Link>
-          </div>
+    <main className="container section stack">
+      <header className="row between page-heading">
+        <div className="stack-sm">
+          <p className="text-sm">Workspace {name}</p>
+          <h1>Acara kamu</h1>
+          <p>Siapkan rencana, bagikan link, dan pantau jawaban peserta.</p>
         </div>
-        <div className="hero-art hide-mobile">
-          <Trees size={110} strokeWidth={1} />
-          <span className="hero-sticker sticker-one">Rencana kecil, cerita besar.</span>
-          <span className="hero-sticker sticker-two">Let’s make it happen ✨</span>
-        </div>
-      </section>
-      <section className="stack section" style={{ paddingTop: 16 }}>
-        <div className="row between">
-          <div className="row">
-            <h2>Acara kamu</h2>
-            <span className="pill">{events.length} acara</span>
-          </div>
-          <span className="muted hide-mobile" style={{ fontSize: 12 }}>
-            Semua rencana, satu tempat.
-          </span>
-        </div>
-        <div className="tabs">
-          {[
-            ['active', 'Berjalan'],
-            ['completed', 'Selesai'],
-            ['archived', 'Arsip'],
-          ].map(([v, l]) => (
-            <button
-              key={v}
-              onClick={() => setTab(v)}
-              className={`tab ${tab === v ? 'active' : ''}`}
-            >
-              {l}
-            </button>
-          ))}
-        </div>
-        {shown.length ? (
-          <div className="grid grid-3">
-            {shown.map((e) => (
-              <Link key={e.id} href={`/admin/events/${e.id}`} className="card event-card">
-                <div className="event-cover">
-                  {e.cover_path ? (
-                    <img src={mediaUrl(e.cover_path)!} alt="" />
-                  ) : (
-                    <Trees size={70} strokeWidth={1} />
-                  )}
-                  <span className={`badge badge-${e.status}`}>{statusLabel[e.status]}</span>
-                </div>
-                <div className="event-content">
-                  <h3>{e.name}</h3>
-                  <p
-                    style={{
-                      fontSize: 12,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {e.description || 'Momen seru sedang direncanakan.'}
-                  </p>
-                  <div className="event-meta">
-                    <span className="row" style={{ gap: 5 }}>
-                      <Users size={14} />
-                      {e.participants[0]?.count || 0} peserta
-                    </span>
-                    <span className="row" style={{ gap: 5 }}>
-                      <CalendarDays size={14} />
-                      {e.stage1_deadline
-                        ? prettyDate(e.stage1_deadline).split(', ')[1]
-                        : 'Belum ada deadline'}
-                    </span>
+        <Button asChild>
+          <Link href="/admin/events/new">
+            <Plus size={17} />
+            Buat acara baru
+          </Link>
+        </Button>
+      </header>
+      <Tabs value={tab} onValueChange={setTab} className="gap-6">
+        <TabsList variant="line" aria-label="Filter acara">
+          <TabsTrigger value="active">Berjalan</TabsTrigger>
+          <TabsTrigger value="completed">Selesai</TabsTrigger>
+          <TabsTrigger value="archived">Arsip</TabsTrigger>
+        </TabsList>
+        <TabsContent value={tab}>
+          {shown.length ? (
+            <div className="event-list">
+              {shown.map((e) => (
+                <Link key={e.id} href={`/admin/events/${e.id}`} className="event-row">
+                  <div className="event-thumbnail">
+                    {e.cover_path ? (
+                      <img src={mediaUrl(e.cover_path)!} alt="" />
+                    ) : (
+                      <CalendarDays size={25} strokeWidth={1.5} />
+                    )}
                   </div>
-                  <div className="event-footer">
-                    <span>Kelola acara</span>
-                    <ArrowUpRight size={18} />
+                  <div className="event-row-body">
+                    <div className="row between">
+                      <h3>{e.name}</h3>
+                      <span className={`badge badge-${e.status}`}>{statusLabel[e.status]}</span>
+                    </div>
+                    <p className="line-clamp-1 text-sm mt-1">
+                      {e.description || 'Lengkapi detail dan mulai mengumpulkan jawaban.'}
+                    </p>
+                    <div className="event-meta">
+                      <span className="row">
+                        <Users size={14} />
+                        {e.participants[0]?.count || 0} peserta
+                      </span>
+                      <span>
+                        {e.final_date
+                          ? prettyDate(e.final_date)
+                          : e.stage1_deadline
+                            ? `Batas voting ${prettyDate(e.stage1_deadline)}`
+                            : 'Tanggal belum ditetapkan'}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        ) : (
-          <div className="empty">
-            <Sparkles size={34} />
-            <h3>
-              {tab === 'active' ? 'Cerita berikutnya menunggu kamu.' : 'Belum ada acara di sini.'}
-            </h3>
-            <p>Buat acara pertamamu, bagikan link, dan biarkan semua ikut merencanakan.</p>
-            <Link className="button" href="/admin/events/new">
-              Buat acara <ArrowRight size={16} />
-            </Link>
-          </div>
-        )}
-        <div className="card card-lime row between">
-          <div className="row">
-            <span style={{ fontSize: 26 }}>✦</span>
-            <div>
-              <h3 style={{ fontSize: 15 }}>Lebih sedikit chat “jadi kapan?”</h3>
-              <p style={{ fontSize: 12 }}>
-                Bagikan satu link. Teman-teman pilih tanggal dan villa tanpa perlu akun.
-              </p>
+                  <ArrowUpRight className="hide-mobile" size={18} />
+                </Link>
+              ))}
             </div>
-          </div>
-          <span className="eyebrow hide-mobile">MORE QUALITY TIME</span>
-        </div>
-      </section>
+          ) : (
+            <div className="empty">
+              <CalendarDays size={28} />
+              <h3>{tab === 'active' ? 'Belum ada acara berjalan' : 'Belum ada acara di sini'}</h3>
+              <p>
+                {tab === 'active'
+                  ? 'Mulai dengan nama acara, beberapa tanggal, dan pilihan villa.'
+                  : 'Acara dengan fase ini akan muncul di sini.'}
+              </p>
+              {tab === 'active' && (
+                <Button asChild>
+                  <Link href="/admin/events/new">Buat acara pertama</Link>
+                </Button>
+              )}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
     </main>
   );
 }

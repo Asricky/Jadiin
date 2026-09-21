@@ -1,4 +1,6 @@
 'use client';
+import { Textarea } from './ui/textarea';
+import { Input } from './ui/input';
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -6,12 +8,17 @@ import { useRouter } from 'next/navigation';
 import QRCode from 'qrcode';
 import { ArrowLeft, Plus, Users, Car, Wallet, CalendarDays, ExternalLink } from 'lucide-react';
 import type { Bundle, Participant, Status, Villa } from '@/types/domain';
+import { PhaseTimeline, phases } from './phase-timeline';
+import { analytics } from '@/lib/planning';
+import { MoneyInput, parseMoney } from './money-input';
+import { Progress } from './ui/progress';
 import { statusLabel } from '@/types/domain';
-import { api, prettyDate, rupiah, inputDateTime, mediaUrl } from '@/lib/utils';
+import { api, prettyDate, rupiah, inputDateTime } from '@/lib/utils';
 import { Button } from './ui/button';
 import { CopyButton, Notice, UploadField } from './common';
 import { PlanningAnalytics } from './analytics';
 import { DatesEditor, VillaEditor } from './editors';
+import { VillaCard } from './villa-card';
 import { Transport } from './transport';
 import { Dialog, DialogTrigger, DialogContent, DialogTitle, DialogDescription } from './ui/dialog';
 const tabs = [
@@ -35,6 +42,7 @@ export function EventManager({ data, tab, appUrl }: { data: Bundle; tab: string;
   const [editing, setEditing] = useState<Villa | undefined>();
   const [addVilla, setAddVilla] = useState(false);
   const [access, setAccess] = useState('');
+  const [pendingStatus, setPendingStatus] = useState<Status | null>(null);
   const locked = ['COMPLETED', 'ARCHIVED'].includes(event.status);
   const eventUrl = `${appUrl}/e/${event.slug}`;
   useEffect(() => {
@@ -62,12 +70,8 @@ export function EventManager({ data, tab, appUrl }: { data: Bundle; tab: string;
       setBusy(false);
     }
   }
-  async function transition(status: Status) {
-    const message =
-      status === 'STAGE_1_CLOSED'
-        ? 'Participant tidak dapat mengirim atau mengubah Stage 1 setelah ditutup. Lanjutkan?'
-        : `Ubah status menjadi ${statusLabel[status]}?`;
-    if (confirm(message)) await act('status', { status });
+  function transition(status: Status) {
+    setPendingStatus(status);
   }
   const paid = data.payments.filter((p) => p.status === 'VERIFIED').length;
   const next: Partial<Record<Status, [Status, string]>> = {
@@ -101,6 +105,43 @@ export function EventManager({ data, tab, appUrl }: { data: Bundle; tab: string;
           )}
         </div>
       </div>
+      <PhaseTimeline status={event.status} onBack={transition} disabled={busy} />
+      <Dialog
+        open={!!pendingStatus}
+        onOpenChange={(open) => {
+          if (!open) setPendingStatus(null);
+        }}
+      >
+        <DialogContent>
+          <div className="stack">
+            <DialogTitle className="text-xl font-semibold">Ubah fase acara?</DialogTitle>
+            <DialogDescription>
+              {pendingStatus &&
+              phases.findIndex((p) => p.status === pendingStatus) <
+                phases.findIndex((p) => p.status === event.status)
+                ? 'Acara kembali ke fase sebelumnya. Jawaban, transport, dan pembayaran tetap tersimpan. Peserta mengikuti akses fase yang dibuka. Deadline voting yang sudah lewat akan dikosongkan saat voting dibuka kembali.'
+                : 'Pastikan pengaturan sudah sesuai sebelum melanjutkan. Setelah voting ditutup, peserta tidak bisa mengubah jawaban.'}
+            </DialogDescription>
+            <p>
+              Fase tujuan: <strong>{pendingStatus ? statusLabel[pendingStatus] : ''}</strong>
+            </p>
+            <div className="row">
+              <Button variant="outline" onClick={() => setPendingStatus(null)}>
+                Batal
+              </Button>
+              <Button
+                disabled={busy}
+                onClick={async () => {
+                  if (pendingStatus && (await act('status', { status: pendingStatus })))
+                    setPendingStatus(null);
+                }}
+              >
+                Ya, ubah fase
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
       <div className="split-admin">
         <nav className="side-nav" aria-label="Menu acara">
           {tabs.map(([key, label]) => (
@@ -140,11 +181,7 @@ export function EventManager({ data, tab, appUrl }: { data: Bundle; tab: string;
               </div>
               <div className="card card-lime row between">
                 <div className="stack-sm">
-                  <h3>
-                    {event.status === 'DRAFT'
-                      ? 'Rencana kamu hampir siap.'
-                      : 'Ajak teman ikut merencanakan.'}
-                  </h3>
+                  <h3>{event.status === 'DRAFT' ? 'Persiapan acara' : 'Link peserta'}</h3>
                   <p style={{ fontSize: 13 }}>
                     {event.status === 'DRAFT'
                       ? `${data.dates.length} kandidat tanggal · ${data.villas.filter((v) => v.active).length} villa aktif. Lengkapi keduanya lalu publish.`
@@ -187,7 +224,7 @@ export function EventManager({ data, tab, appUrl }: { data: Bundle; tab: string;
           {tab === 'villas' && (
             <>
               <div className="row between">
-                <h2>Tempat untuk berkumpul</h2>
+                <h2>Pilihan villa</h2>
                 {!locked && event.status !== 'STAGE_2_OPEN' && (
                   <Button
                     onClick={() => {
@@ -205,6 +242,7 @@ export function EventManager({ data, tab, appUrl }: { data: Bundle; tab: string;
                   key={editing?.id || 'new'}
                   eventId={event.id}
                   villa={editing}
+                  images={data.images}
                   onDone={() => {
                     setEditing(undefined);
                     setAddVilla(false);
@@ -224,36 +262,7 @@ export function EventManager({ data, tab, appUrl }: { data: Bundle; tab: string;
                     {rupiah(v.price)} · {v.capacity} orang ·{' '}
                     {data.votes.filter((x) => x.villa_id === v.id).length} suara
                   </p>
-                  <div className="gallery">
-                    {data.images
-                      .filter((image) => image.villa_id === v.id)
-                      .map((image) => (
-                        <div key={image.id} className="stack-sm" style={{ minWidth: 170 }}>
-                          <img src={mediaUrl(image.storage_path)!} alt={v.name} loading="lazy" />
-                          {!locked && event.status !== 'STAGE_2_OPEN' && (
-                            <div className="row">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => void act('cover_image', { id: image.id })}
-                              >
-                                Jadikan cover
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => {
-                                  if (confirm('Hapus foto ini?'))
-                                    void act('delete_image', { id: image.id });
-                                }}
-                              >
-                                Hapus foto
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                  </div>
+                  <VillaCard villa={v} images={data.images} />
                   <p style={{ fontSize: 12 }}>
                     Pemilih:{' '}
                     {data.participants
@@ -321,7 +330,7 @@ export function EventManager({ data, tab, appUrl }: { data: Bundle; tab: string;
                 <span className="pill">Semua sudah submit Stage 1</span>
               </div>
               <div className="grid grid-2">
-                <input
+                <Input
                   className="input"
                   placeholder="Cari nama atau WhatsApp"
                   aria-label="Cari peserta"
@@ -444,7 +453,7 @@ export function EventManager({ data, tab, appUrl }: { data: Bundle; tab: string;
           )}
           {tab === 'payments' && (
             <>
-              <h2>Patungan, tercatat rapi.</h2>
+              <h2>Pembayaran</h2>
               <div className="grid grid-3 stats-grid">
                 {[
                   ['Terverifikasi', paid],
@@ -543,7 +552,7 @@ export function EventManager({ data, tab, appUrl }: { data: Bundle; tab: string;
                 ].map(([n, l]) => (
                   <label key={n} className="field">
                     {l}
-                    <input
+                    <Input
                       disabled={locked}
                       name={n}
                       required
@@ -553,11 +562,11 @@ export function EventManager({ data, tab, appUrl }: { data: Bundle; tab: string;
                 ))}
                 <label className="field">
                   Deskripsi
-                  <textarea disabled={locked} name="description" defaultValue={event.description} />
+                  <Textarea disabled={locked} name="description" defaultValue={event.description} />
                 </label>
                 <label className="field">
                   Deadline Stage 1 (WIB)
-                  <input
+                  <Input
                     disabled={locked}
                     type="datetime-local"
                     name="stage1_deadline"
@@ -565,7 +574,7 @@ export function EventManager({ data, tab, appUrl }: { data: Bundle; tab: string;
                   />
                 </label>
                 <label className="row">
-                  <input
+                  <Input
                     disabled={locked}
                     type="checkbox"
                     name="show_participant_list"
@@ -574,7 +583,7 @@ export function EventManager({ data, tab, appUrl }: { data: Bundle; tab: string;
                   Tampilkan daftar nama peserta
                 </label>
                 <label className="row">
-                  <input
+                  <Input
                     disabled={locked}
                     type="checkbox"
                     name="show_transport_groups"
@@ -661,11 +670,11 @@ function ParticipantEdit({
         >
           <label className="field">
             Nama
-            <input name="name" defaultValue={p.name} required />
+            <Input name="name" defaultValue={p.name} required />
           </label>
           <label className="field">
             WhatsApp
-            <input name="whatsapp" defaultValue={p.whatsapp} required />
+            <Input name="whatsapp" defaultValue={p.whatsapp} required />
           </label>
           <label className="field">
             Kendaraan
@@ -697,16 +706,15 @@ function Finalization({
         e.preventDefault();
         const f = new FormData(e.currentTarget);
         if (!confirm('Simpan keputusan final villa, tanggal, dan pembayaran?')) return;
-        await act('finalize', Object.fromEntries(f));
+        await act('finalize', {
+          ...Object.fromEntries(f),
+          cost_per_person: parseMoney(f.get('cost_per_person')),
+        });
       }}
     >
       <span className="eyebrow">FINALISASI RENCANA</span>
-      <h2>Saatnya bikin keputusan.</h2>
-      <div className="stepper">
-        {[0, 1, 2, 3, 4].map((i) => (
-          <span key={i} className={`step ${i <= step ? 'done' : ''}`} />
-        ))}
-      </div>
+      <h2>Rencana final</h2>
+      <Progress value={(step + 1) * 20} className="h-1" aria-label="Progres finalisasi" />
       <p style={{ fontSize: 12 }}>
         Langkah {step + 1}:{' '}
         {['Villa final', 'Tanggal final', 'Transport', 'Pembayaran', 'Review & simpan'][step]}
@@ -731,14 +739,21 @@ function Finalization({
       <div style={{ display: step === 1 ? 'block' : 'none' }}>
         <label className="field">
           Tanggal final
-          <select name="final_date" defaultValue={event.final_date || data.dates[0]?.date}>
-            {data.dates.map((d) => (
-              <option value={d.date} key={d.id}>
-                {prettyDate(d.date)} —{' '}
-                {data.availability.filter((x) => x.event_date_id === d.id).length} bisa
+          <select
+            name="final_date"
+            defaultValue={event.final_date || analytics(data).datePairs[0]?.start.date}
+            required
+          >
+            {analytics(data).datePairs.map((pair) => (
+              <option value={pair.start.date} key={pair.start.id}>
+                {prettyDate(pair.start.date)} – {prettyDate(pair.end.date)} · {pair.count} bisa di
+                kedua hari
               </option>
             ))}
           </select>
+          {!analytics(data).datePairs.length && (
+            <small>Tambahkan minimal dua kandidat tanggal berurutan di fase Draft.</small>
+          )}
         </label>
       </div>
       <div style={{ display: step === 2 ? 'block' : 'none' }}>
@@ -750,8 +765,14 @@ function Finalization({
         </Link>
       </div>
       <div className="stack-sm" style={{ display: step === 3 ? 'flex' : 'none' }}>
+        <label className="field">
+          Biaya per orang (Rp)
+          <MoneyInput name="cost_per_person" defaultValue={event.cost_per_person || 0} />
+          {data.payments.length > 0 && (
+            <small>Biaya tidak dapat diubah setelah ada pembayaran.</small>
+          )}
+        </label>
         {[
-          ['cost_per_person', 'Biaya per orang (Rp)', 'number'],
           ['bank_name', 'Nama bank', 'text'],
           ['bank_account_number', 'Nomor rekening', 'text'],
           ['bank_account_holder', 'Nama pemilik rekening', 'text'],
@@ -759,7 +780,7 @@ function Finalization({
         ].map(([name, label, type]) => (
           <label className="field" key={name}>
             {label}
-            <input
+            <Input
               name={name}
               type={type}
               defaultValue={
@@ -772,7 +793,7 @@ function Finalization({
         ))}
         <label className="field">
           Catatan pembayaran
-          <textarea name="payment_note" defaultValue={event.payment_note || ''} />
+          <Textarea name="payment_note" defaultValue={event.payment_note || ''} />
         </label>
       </div>
       {step === 4 && (

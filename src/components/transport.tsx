@@ -1,4 +1,5 @@
 'use client';
+import { Input } from './ui/input';
 import { useState } from 'react';
 import {
   DndContext,
@@ -43,6 +44,9 @@ function Drop({ id, children }: { id: string; children: React.ReactNode }) {
 export function Transport({ data, act, locked }: { data: Bundle; act: Act; locked: boolean }) {
   const [type, setType] = useState('CAR');
   const [driver, setDriver] = useState('');
+  const [owner, setOwner] = useState('');
+  const [label, setLabel] = useState('');
+  const [capacity, setCapacity] = useState(5);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor),
@@ -61,7 +65,7 @@ export function Transport({ data, act, locked }: { data: Bundle; act: Act; locke
   return (
     <div className="stack">
       <div>
-        <h2>Semua kebagian tempat.</h2>
+        <h2>Transport peserta</h2>
         <p>Geser nama ke kendaraan di desktop, atau gunakan pilihan transport di bawah.</p>
       </div>
       {!locked && (
@@ -81,14 +85,45 @@ export function Transport({ data, act, locked }: { data: Bundle; act: Act; locke
             if (result) {
               form.reset();
               setDriver('');
+              setOwner('');
+              setLabel('');
             }
           }}
         >
           <h3>Tambah kendaraan</h3>
+          <p className="text-sm">
+            Pilih pemilik untuk mengisi label, kapasitas, dan usulan driver dari jawaban peserta.
+          </p>
+          {data.participants.some((p) => p.vehicle_type !== 'NONE') && (
+            <details>
+              <summary className="text-sm">Kendaraan yang ditawarkan peserta</summary>
+              <div className="stack-sm mt-3">
+                {data.participants
+                  .filter((p) => p.vehicle_type !== 'NONE')
+                  .map((p) => (
+                    <p key={p.id} className="text-sm">
+                      {p.vehicle_type === 'CAR' ? 'Mobil' : 'Motor'} {p.vehicle_owner || p.name} ·
+                      Driver: {p.vehicle_driver || p.name} ·{' '}
+                      {p.vehicle_capacity || (p.vehicle_type === 'CAR' ? 5 : 2)} kursi
+                    </p>
+                  ))}
+              </div>
+            </details>
+          )}
           <div className="grid grid-2">
             <label className="field">
               Jenis
-              <select value={type} onChange={(e) => setType(e.target.value)}>
+              <select
+                value={type}
+                onChange={(e) => {
+                  setType(e.target.value);
+                  setCapacity(
+                    e.target.value === 'MOTORCYCLE' ? 2 : e.target.value === 'INDEPENDENT' ? 1 : 5,
+                  );
+                  setOwner('');
+                  setLabel('');
+                }}
+              >
                 <option value="CAR">Mobil</option>
                 <option value="MOTORCYCLE">Motor</option>
                 <option value="INDEPENDENT">Mandiri</option>
@@ -96,15 +131,22 @@ export function Transport({ data, act, locked }: { data: Bundle; act: Act; locke
             </label>
             <label className="field">
               Label
-              <input required name="label" placeholder="Mobil Andi" />
+              <Input
+                required
+                name="label"
+                placeholder="Mobil Andi"
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+              />
             </label>
             <label className="field">
               Kapasitas (termasuk driver)
-              <input
+              <Input
                 key={type}
                 type="number"
                 name="capacity"
-                defaultValue={type === 'MOTORCYCLE' ? 2 : type === 'INDEPENDENT' ? 1 : 5}
+                value={capacity}
+                onChange={(e) => setCapacity(Number(e.target.value))}
                 min={1}
                 max={type === 'MOTORCYCLE' ? 2 : type === 'INDEPENDENT' ? 1 : 50}
                 required
@@ -112,7 +154,27 @@ export function Transport({ data, act, locked }: { data: Bundle; act: Act; locke
             </label>
             <label className="field">
               Pemilik
-              <select name="owner">
+              <select
+                aria-label="Pemilik"
+                name="owner"
+                value={owner}
+                onChange={(e) => {
+                  setOwner(e.target.value);
+                  const p = data.participants.find((p) => p.id === e.target.value);
+                  if (p) {
+                    const t = p.vehicle_type === 'NONE' ? type : p.vehicle_type;
+                    setType(t);
+                    setCapacity(p.vehicle_capacity || (t === 'MOTORCYCLE' ? 2 : 5));
+                    setLabel(
+                      `${t === 'CAR' ? 'Mobil' : t === 'MOTORCYCLE' ? 'Motor' : 'Mandiri'} ${p.vehicle_owner || p.name}`,
+                    );
+                    const proposed = unassigned.find(
+                      (x) => x.name.toLowerCase() === (p.vehicle_driver || p.name).toLowerCase(),
+                    );
+                    setDriver(proposed?.id || '');
+                  }
+                }}
+              >
                 <option value="">Tidak ditentukan</option>
                 {data.participants.map((p) => (
                   <option key={p.id} value={p.id}>

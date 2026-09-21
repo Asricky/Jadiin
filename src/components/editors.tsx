@@ -1,10 +1,14 @@
 'use client';
 import { useState } from 'react';
 import { addDays, format, parseISO, differenceInCalendarDays } from 'date-fns';
-import { api } from '@/lib/utils';
+import { api, mediaUrl } from '@/lib/utils';
 import { Notice, UploadField } from './common';
 import { Button } from './ui/button';
-import type { EventDate, Villa } from '@/types/domain';
+import { Star, Trash2 } from 'lucide-react';
+import { MoneyInput, parseMoney } from './money-input';
+import { Input } from './ui/input';
+import { Textarea } from './ui/textarea';
+import type { EventDate, Villa, VillaImage } from '@/types/domain';
 export function DatesEditor({
   eventId,
   dates,
@@ -22,15 +26,15 @@ export function DatesEditor({
   return (
     <div className="card stack">
       <h3>Pilih tanggal yang mungkin</h3>
-      <p>Tambahkan rentang (maksimal 90 hari), atau pilih tanggal satu per satu.</p>
+      <p>Tambahkan rentang maksimal 90 hari. Sertakan dua tanggal berurutan untuk acara 2 hari 1 malam.</p>
       <div className="grid grid-2">
         <label className="field">
           Dari tanggal
-          <input type="date" value={start} onChange={(e) => setStart(e.target.value)} />
+          <Input type="date" value={start} onChange={(e) => setStart(e.target.value)} />
         </label>
         <label className="field">
           Sampai tanggal
-          <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
+          <Input type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
         </label>
       </div>
       <Button
@@ -94,15 +98,20 @@ export function DatesEditor({
 export function VillaEditor({
   eventId,
   villa,
+  images = [],
   onDone,
 }: {
   eventId: string;
   villa?: Villa;
+  images?: VillaImage[];
   onDone: () => void;
 }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [savedId, setSavedId] = useState(villa?.id);
+  const [photos, setPhotos] = useState(images.filter((i) => i.villa_id === villa?.id));
+  const [cover, setCover] = useState(villa?.cover_path || null);
+  const [saved, setSaved] = useState(false);
   return (
     <form
       className="card stack"
@@ -118,12 +127,12 @@ export function VillaEditor({
               id: savedId,
               name: f.get('name'),
               description: f.get('description'),
-              price: Number(f.get('price')),
+              price: parseMoney(f.get('price')),
               capacity: Number(f.get('capacity')),
               address: f.get('address'),
               google_maps_url: f.get('google_maps_url'),
               facilities: String(f.get('facilities'))
-                .split(',')
+                .split('\n')
                 .map((s) => s.trim())
                 .filter(Boolean),
               notes: f.get('notes'),
@@ -132,6 +141,7 @@ export function VillaEditor({
             },
           });
           setSavedId(result.id);
+          setSaved(true);
         } catch (err) {
           setError((err as Error).message);
         } finally {
@@ -140,45 +150,73 @@ export function VillaEditor({
       }}
     >
       <h3>{villa ? 'Edit villa' : 'Tambah villa'}</h3>
-      {[
-        ['name', 'Nama villa', 'text'],
-        ['price', 'Harga per malam (Rp)', 'number'],
-        ['capacity', 'Kapasitas orang', 'number'],
-        ['address', 'Alamat', 'text'],
-        ['google_maps_url', 'Google Maps URL', 'url'],
-        ['sort_order', 'Urutan', 'number'],
-      ].map(([name, label, type]) => (
-        <label key={name} className="field">
-          {label}
-          <input
-            name={name}
-            type={type}
-            required={['name', 'price', 'capacity'].includes(name)}
-            defaultValue={String(
-              villa?.[name as keyof Villa] ??
-                (name === 'capacity' ? 1 : name === 'price' || name === 'sort_order' ? 0 : ''),
-            )}
+      <label className="field">
+        Nama villa
+        <Input
+          name="name"
+          required
+          defaultValue={villa?.name || ''}
+          placeholder="Nama penginapan"
+        />
+      </label>
+      <div className="grid grid-2">
+        <label className="field">
+          Harga per malam (Rp)
+          <MoneyInput name="price" defaultValue={villa?.price || 0} />
+        </label>
+        <label className="field">
+          Kapasitas orang
+          <Input
+            name="capacity"
+            type="number"
+            min={1}
+            max={10000}
+            required
+            defaultValue={villa?.capacity || 1}
           />
         </label>
-      ))}
+      </div>
       <label className="field">
-        Deskripsi
-        <textarea name="description" defaultValue={villa?.description} />
-      </label>
-      <label className="field">
-        Fasilitas (pisahkan dengan koma)
-        <input
-          name="facilities"
-          defaultValue={villa?.facilities.join(', ')}
-          placeholder="Kolam renang, BBQ, WiFi"
+        Alamat
+        <Input
+          name="address"
+          defaultValue={villa?.address || ''}
+          placeholder="Jalan, kawasan, kota"
         />
       </label>
       <label className="field">
+        Google Maps URL
+        <Input
+          name="google_maps_url"
+          type="url"
+          defaultValue={villa?.google_maps_url || ''}
+          placeholder="https://maps.app.goo.gl/..."
+        />
+      </label>
+      <label className="field">
+        Deskripsi
+        <Textarea name="description" defaultValue={villa?.description} />
+      </label>
+      <label className="field">
+        Fasilitas (satu fasilitas per baris)
+        <Textarea
+          name="facilities"
+          rows={5}
+          defaultValue={villa?.facilities.join('\n')}
+          placeholder={'Kolam renang\nArea BBQ\nWiFi'}
+        />
+        <small>Tekan Enter untuk menambahkan fasilitas berikutnya.</small>
+      </label>
+      <label className="field">
         Catatan
-        <textarea name="notes" defaultValue={villa?.notes} />
+        <Textarea name="notes" defaultValue={villa?.notes} />
+      </label>
+      <label className="field">
+        Urutan tampil
+        <Input name="sort_order" type="number" min={0} defaultValue={villa?.sort_order || 0} />
       </label>
       <label className="row">
-        <input type="checkbox" name="active" defaultChecked={villa?.active ?? true} />
+        <Input type="checkbox" name="active" defaultChecked={villa?.active ?? true} />
         Aktif untuk voting
       </label>
       <Notice error>{error}</Notice>
@@ -187,11 +225,82 @@ export function VillaEditor({
       </Button>
       {savedId && (
         <>
-          <Notice>Villa tersimpan. Tambahkan foto untuk membantu teman memilih.</Notice>
+          {saved && <Notice>Villa tersimpan.</Notice>}
+          <div className="stack-sm">
+            <h3>Foto villa</h3>
+            <p>Pilih bintang pada foto yang ingin dijadikan cover.</p>
+            <div className="photo-grid">
+              {photos.map((photo, index) => (
+                <div className="photo-tile" key={photo.id}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={mediaUrl(photo.storage_path)!} alt={`Foto villa ${index + 1}`} />
+                  <div className="photo-actions">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={cover === photo.storage_path ? 'default' : 'outline'}
+                      aria-label={`Jadikan foto ${index + 1} cover`}
+                      aria-pressed={cover === photo.storage_path}
+                      disabled={busy}
+                      onClick={async () => {
+                        setBusy(true);
+                        try {
+                          await api(`/api/admin/events/${eventId}`, {
+                            action: 'cover_image',
+                            data: { id: photo.id },
+                          });
+                          setCover(photo.storage_path);
+                        } catch (e) {
+                          setError((e as Error).message);
+                        } finally {
+                          setBusy(false);
+                        }
+                      }}
+                    >
+                      <Star
+                        size={16}
+                        fill={cover === photo.storage_path ? 'currentColor' : 'none'}
+                      />
+                      {cover === photo.storage_path ? 'Cover' : ''}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      aria-label={`Hapus foto ${index + 1}`}
+                      disabled={busy}
+                      onClick={async () => {
+                        if (!confirm('Hapus foto ini?')) return;
+                        setBusy(true);
+                        try {
+                          await api(`/api/admin/events/${eventId}`, {
+                            action: 'delete_image',
+                            data: { id: photo.id },
+                          });
+                          setPhotos(photos.filter((i) => i.id !== photo.id));
+                          if (cover === photo.storage_path) setCover(null);
+                        } catch (e) {
+                          setError((e as Error).message);
+                        } finally {
+                          setBusy(false);
+                        }
+                      }}
+                    >
+                      <Trash2 size={15} />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
           <UploadField
             eventId={eventId}
             kind="media"
             villaId={savedId}
+            onUploaded={(image, newCover) => {
+              setPhotos((current) => [...current.filter((i) => i.id !== image.id), image]);
+              setCover(newCover);
+            }}
             onDone={() => setError('')}
           />
           <Button type="button" variant="outline" onClick={onDone}>
