@@ -261,15 +261,12 @@ summary {
   white-space: nowrap;
   gap: 4px;
 }
-.brand-mark {
-  display: grid;
-  place-items: center;
-  margin-right: 6px;
-  background: #285b4d;
-  color: white;
-  width: 31px;
-  height: 31px;
-  border-radius: 7px;
+.brand-logo {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  flex-shrink: 0;
+  margin-right: 4px;
 }
 .brand-light {
   font-weight: 400;
@@ -931,9 +928,9 @@ td {
   .brand {
     font-size: 17px;
   }
-  .brand-mark {
-    width: 28px;
-    height: 28px;
+  .brand-logo {
+    width: 46px;
+    height: 46px;
   }
   .nav-link,
   .hide-mobile {
@@ -1054,10 +1051,6 @@ h2 {
 }
 .topbar {
   background: #fffefa;
-}
-.brand-mark {
-  background: #285b4d;
-  border-radius: 10px;
 }
 .button {
   border-radius: 9px;

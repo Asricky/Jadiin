@@ -1,14 +1,13 @@
 'use client';
 import { useState } from 'react';
-import { Copy, Check, CalendarDays } from 'lucide-react';
+import { Copy, Check } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Button } from './ui/button';
 export function Brand() {
   return (
-    <Link href="/" className="brand">
-      <span className="brand-mark">
-        <CalendarDays size={19} />
-      </span>
+    <Link href="/" className="brand" aria-label="Makrab Planner — beranda">
+      <Image src="/brand/logo.png" alt="" width={56} height={56} className="brand-logo" priority />
       Makrab <span className="brand-light">Planner</span>
     </Link>
   );

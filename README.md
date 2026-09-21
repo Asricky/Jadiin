@@ -132,6 +132,8 @@ Tidak ada persistent filesystem, server terpisah, worker berkepanjangan, atau VP
 
 ## Struktur repository
 
+Logo sumber disimpan di `src/documentation/logo.png`. Versi transparan untuk header berada di `public/brand/logo.png`; favicon multiukuran, ikon PNG, dan Apple touch icon berada di `src/app/favicon.ico`, `src/app/icon.png`, dan `src/app/apple-icon.png`. Next.js memasang metadata ikon secara otomatis. Versi transparan dibuat dengan built-in imagegen, dengan instruksi mempertahankan maskot kalender beserta papan hijau dan aksennya, menghapus latar putih, bayangan, tulisan “Makrab Planner” dan tagline di bawahnya, serta memberi latar alpha transparan. Gambar asli tetap disimpan.
+
 `src/app` berisi halaman App Router dan Route Handler; `src/components/ui` berisi primitive shadcn/Radix yang dipakai; `src/components` berisi form dan tampilan produk; `src/lib` berisi validasi, akses Supabase, sesi, dan perhitungan; `supabase/migrations` adalah schema/version history; `scripts` hanya untuk setup dan seed lokal; `tests` berisi unit dan browser test. File instruksi agen generator dihapus dan `agentRules: false` mencegah Next.js membuatnya ulang. CSS daftar acara dan stepper lama yang tidak dipakai serta template `.github` telah dihapus. Build output, laporan test, cache, dependencies, dan secrets tidak masuk Git; folder lokal tersebut dihasilkan otomatis saat development/testing.
 
 ## Membaca rekap pembayaran
