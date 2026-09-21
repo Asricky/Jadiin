@@ -1,0 +1,2 @@
+-- Demo Auth accounts and event responses are seeded through the real Auth/API flow.
+-- After `supabase start` or `supabase db reset`, run `npm run seed`.
