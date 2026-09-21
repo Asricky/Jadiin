@@ -24,8 +24,8 @@ export default async function AuthPage({ params }: { params: Promise<{ mode: str
             <AuthForm mode={modes[mode as keyof typeof modes]} />
           ) : (
             <Notice error>
-              Supabase belum dikonfigurasi. Lengkapi .env.local mengikuti README untuk mulai
-              menggunakan aplikasi.
+              Aplikasi sedang disiapkan. Pendaftaran dan login akan tersedia setelah
+              konfigurasi layanan selesai.
             </Notice>
           )}
         </section>

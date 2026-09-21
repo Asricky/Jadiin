@@ -1,8 +1,8 @@
-.env*
-!.env.example
-test-results/
-playwright-report/
-tests/
-supabase/
-scripts/
-src/documentation/
+/.env*
+!/.env.example
+/test-results/
+/playwright-report/
+/tests/
+/supabase/
+/scripts/
+/src/documentation/
