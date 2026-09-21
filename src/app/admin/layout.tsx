@@ -27,7 +27,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       </header>
       {children}
       <footer className="container footer row between">
-        <span>Makrab Planner © {new Date().getFullYear()}</span>
+        <span>Jadiin © {new Date().getFullYear()}</span>
       </footer>
     </>
   );

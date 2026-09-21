@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 export const metadata: Metadata = {
   title: {
-    default: 'Makrab Planner',
-    template: '%s · Makrab Planner',
+    default: 'Jadiin',
+    template: '%s · Jadiin',
   },
   description:
     'Dari pilih tanggal sampai siap berangkat. Rencanakan makrab bareng teman, semudah berbagi link.',

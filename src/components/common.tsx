@@ -6,9 +6,9 @@ import Image from 'next/image';
 import { Button } from './ui/button';
 export function Brand() {
   return (
-    <Link href="/" className="brand" aria-label="Makrab Planner — beranda">
+    <Link href="/" className="brand" aria-label="Jadiin — beranda">
       <Image src="/brand/logo.png" alt="" width={56} height={56} className="brand-logo" priority />
-      Makrab <span className="brand-light">Planner</span>
+      Jadiin
     </Link>
   );
 }

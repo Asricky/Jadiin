@@ -76,7 +76,7 @@ export default function Home() {
         </section>
       </main>
       <footer className="footer container row between">
-        <span>Makrab Planner</span>
+        <span>Jadiin</span>
         <span>Untuk organizer dan teman seperjalanan.</span>
       </footer>
     </>

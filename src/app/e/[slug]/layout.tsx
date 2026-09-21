@@ -8,7 +8,7 @@ export default function ParticipantLayout({ children }: { children: React.ReactN
         </div>
       </header>
       {children}
-      <footer className="narrow footer">Makrab Planner</footer>
+      <footer className="narrow footer">Jadiin</footer>
     </>
   );
 }

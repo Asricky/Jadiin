@@ -268,9 +268,6 @@ summary {
   flex-shrink: 0;
   margin-right: 4px;
 }
-.brand-light {
-  font-weight: 400;
-}
 .nav-link {
   font-size: 13px;
   color: var(--muted);
