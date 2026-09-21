@@ -18,9 +18,11 @@ export function UploadField({
   villaId,
   onDone,
   onUploaded,
+  amount,
 }: {
   eventId: string;
   kind: 'media' | 'payment';
+  amount?: number;
   villaId?: string;
   onDone: () => void;
   onUploaded?: (image: VillaImage, cover: string | null) => void;
@@ -47,7 +49,14 @@ export function UploadField({
           if (file.size > 5242880) throw new Error('Maksimal 5 MB per foto.');
           const signed = await api<{ intent: string; path: string; token: string; bucket: string }>(
             '/api/uploads',
-            { action: 'sign', kind, event_id: eventId, size: file.size, mime: file.type },
+            {
+              action: 'sign',
+              kind,
+              event_id: eventId,
+              size: file.size,
+              mime: file.type,
+              expected_amount: amount,
+            },
           );
           const { error } = await browserDb()
             .storage.from(signed.bucket)

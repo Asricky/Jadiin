@@ -100,9 +100,7 @@ export const actions = {
       'ARCHIVED',
     ]),
   }),
-  finalize: z.object({
-    final_villa_id: z.string().uuid(),
-    final_date: date,
+  billing: z.object({
     cost_per_person: z.coerce.number().min(0).max(999999999),
     bank_name: z.string().trim().min(1).max(100),
     bank_account_number: z.string().regex(/^\d{5,30}$/),
@@ -110,6 +108,7 @@ export const actions = {
     payment_note: z.string().max(1000).default(''),
     stage2_deadline: deadline,
   }),
+  finalize: z.object({ final_villa_id: z.string().uuid(), final_date: date }),
   group: z
     .object({
       type: z.enum(['CAR', 'MOTORCYCLE', 'INDEPENDENT']),
@@ -142,6 +141,7 @@ export const actions = {
 };
 export const uploadSchema = z.object({
   kind: z.enum(['payment', 'media']),
+  expected_amount: z.number().min(0).max(999999999).optional(),
   event_id: z.string().uuid(),
   mime: z.enum(['image/jpeg', 'image/png', 'image/webp']),
   size: z

@@ -1,3 +1,5 @@
+import { TransportPicker } from '@/components/transport-picker';
+import { appOrigin } from '@/lib/app-origin';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { publicEvent, bundle } from '@/lib/server';
@@ -17,13 +19,13 @@ export default async function Stage2({ params }: { params: Promise<{ slug: strin
     bundle(event),
     service()
       .from('payments')
-      .select('status,admin_note')
+      .select('status,admin_note,amount')
       .eq('participant_id', p.id)
       .eq('event_id', event.id)
       .maybeSingle(),
   ]);
   const villa = data.villas.find((v) => v.id === event.final_villa_id);
-  const myGroup = data.members.find((m) => m.participant_id === p.id)?.transport_group_id;
+  const amount = payment && payment.status !== 'REJECTED' ? payment.amount : event.cost_per_person!;
   return (
     <main className="narrow section stack">
       <span className="eyebrow">{event.name}</span>
@@ -36,39 +38,20 @@ export default async function Stage2({ params }: { params: Promise<{ slug: strin
         </h2>
       </section>
       {villa && <VillaCard villa={villa} images={data.images} />}
-      <section className="stack">
-        <h2>Transport kamu</h2>
-        {data.groups
-          .filter((g) => event.show_transport_groups || g.id === myGroup)
-          .sort((a) => (a.id === myGroup ? -1 : 1))
-          .map((g) => (
-            <div className={`card stack-sm ${g.id === myGroup ? 'card-lime' : ''}`} key={g.id}>
-              <div className="row between">
-                <h3>{g.label}</h3>
-                {g.id === myGroup && <span className="badge">Kendaraanmu</span>}
-              </div>
-              <p>
-                {g.type === 'INDEPENDENT'
-                  ? 'Berangkat mandiri'
-                  : `Driver: ${data.participants.find((x) => x.id === g.driver_participant_id)?.name || '—'}`}
-              </p>
-              <div className="row">
-                {data.members
-                  .filter((m) => m.transport_group_id === g.id)
-                  .map((m) => (
-                    <span className="pill" key={m.participant_id}>
-                      {data.participants.find((x) => x.id === m.participant_id)?.name}
-                      {m.role === 'DRIVER' ? ' · Driver' : ''}
-                    </span>
-                  ))}
-              </div>
-            </div>
-          ))}
-      </section>
+      <TransportPicker
+        slug={slug}
+        initial={{
+          groups: data.groups,
+          members: data.members,
+          participants: data.participants.map((p) => ({ id: p.id, name: p.name })),
+          participantId: p.id,
+          open: event.status === 'STAGE_2_OPEN',
+        }}
+      />
       <section className="card stack">
-        <span className="eyebrow">BIAYA PER PESERTA</span>
+        <span className="eyebrow">02 / PEMBAYARAN</span>
         <h2>
-          {rupiah(event.cost_per_person)} <small className="muted">/ orang</small>
+          {rupiah(amount)} <small className="muted">/ orang</small>
         </h2>
         <div className="divider" />
         <div>
@@ -106,12 +89,12 @@ export default async function Stage2({ params }: { params: Promise<{ slug: strin
           <section className="stack">
             <h2>Kirim bukti pembayaran</h2>
             <p>Bukti hanya bisa dilihat organizer, tersimpan secara private.</p>
-            <PaymentUpload eventId={event.id} slug={slug} />
+            <PaymentUpload eventId={event.id} slug={slug} amount={amount} />
           </section>
         )}
       <div>
         <CopyButton
-          value={`${process.env.NEXT_PUBLIC_APP_URL}/e/${slug}/p/${p.token}`}
+          value={`${appOrigin()}/e/${slug}/p/${p.token}`}
           label="Simpan link akses pribadi"
         />
       </div>

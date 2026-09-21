@@ -6,12 +6,21 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import QRCode from 'qrcode';
-import { ArrowLeft, Plus, Users, Car, Wallet, CalendarDays, ExternalLink } from 'lucide-react';
+import {
+  ArrowLeft,
+  Plus,
+  Users,
+  Car,
+  Wallet,
+  CalendarDays,
+  ExternalLink,
+  LayoutGrid,
+  Settings2,
+  House,
+} from 'lucide-react';
 import type { Bundle, Participant, Status, Villa } from '@/types/domain';
 import { PhaseTimeline, phases } from './phase-timeline';
 import { analytics } from '@/lib/planning';
-import { MoneyInput, parseMoney } from './money-input';
-import { Progress } from './ui/progress';
 import { statusLabel } from '@/types/domain';
 import { api, prettyDate, rupiah, inputDateTime } from '@/lib/utils';
 import { Button } from './ui/button';
@@ -19,20 +28,34 @@ import { CopyButton, Notice, UploadField } from './common';
 import { PlanningAnalytics } from './analytics';
 import { DatesEditor, VillaEditor } from './editors';
 import { VillaCard } from './villa-card';
+import { PaymentsPanel } from './payments-panel';
+import { TransportRoster } from './transport-roster';
 import { Transport } from './transport';
 import { Dialog, DialogTrigger, DialogContent, DialogTitle, DialogDescription } from './ui/dialog';
-const tabs = [
-  ['overview', 'Ringkasan'],
-  ['participants', 'Peserta'],
-  ['dates', 'Tanggal'],
-  ['villas', 'Villa'],
-  ['transport', 'Transport'],
-  ['payments', 'Pembayaran'],
-  ['settings', 'Pengaturan'],
+const tabs: [string, string, typeof Users][] = [
+  ['overview', 'Ringkasan', LayoutGrid],
+  ['participants', 'Peserta', Users],
+  ['dates', 'Tanggal', CalendarDays],
+  ['villas', 'Villa', House],
+  ['transport', 'Transport', Car],
+  ['payments', 'Pembayaran', Wallet],
+  ['settings', 'Pengaturan', Settings2],
 ];
 export function EventManager({ data, tab, appUrl }: { data: Bundle; tab: string; appUrl: string }) {
   const router = useRouter();
   const event = data.event;
+  useEffect(() => {
+    if (event.status !== 'STAGE_2_OPEN') return;
+    const refresh = () => {
+      if (document.visibilityState === 'visible') router.refresh();
+    };
+    const timer = setInterval(refresh, 15000);
+    window.addEventListener('focus', refresh);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [router, event.status]);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [busy, setBusy] = useState(false);
@@ -49,7 +72,7 @@ export function EventManager({ data, tab, appUrl }: { data: Bundle; tab: string;
     QRCode.toDataURL(eventUrl, {
       width: 180,
       margin: 1,
-      color: { dark: '#245844', light: '#ffffff' },
+      color: { dark: '#23483f', light: '#ffffff' },
     })
       .then(setQr)
       .catch(() => {});
@@ -87,7 +110,7 @@ export function EventManager({ data, tab, appUrl }: { data: Bundle; tab: string;
         <ArrowLeft size={14} />
         Semua acara
       </Link>
-      <div className="row between">
+      <div className="row between event-heading">
         <div className="stack-sm">
           <span className={`badge badge-${event.status}`} style={{ alignSelf: 'start' }}>
             {statusLabel[event.status]}
@@ -144,12 +167,13 @@ export function EventManager({ data, tab, appUrl }: { data: Bundle; tab: string;
       </Dialog>
       <div className="split-admin">
         <nav className="side-nav" aria-label="Menu acara">
-          {tabs.map(([key, label]) => (
+          {tabs.map(([key, label, Icon]) => (
             <Link
               href={`/admin/events/${event.id}/${key}`}
               key={key}
               className={tab === key ? 'active' : ''}
             >
+              <Icon size={17} />
               {label}
             </Link>
           ))}
@@ -164,15 +188,19 @@ export function EventManager({ data, tab, appUrl }: { data: Bundle; tab: string;
                   [Users, data.participants.length, 'Jawaban Stage 1'],
                   [
                     Car,
-                    data.participants.filter((p) => p.vehicle_type === 'CAR').length,
-                    'Mobil tersedia',
+                    ['STAGE_1_CLOSED', 'STAGE_2_OPEN', 'COMPLETED'].includes(event.status)
+                      ? data.groups.filter((g) => g.type !== 'INDEPENDENT').length
+                      : data.participants.filter((p) => p.vehicle_type !== 'NONE').length,
+                    ['STAGE_1_CLOSED', 'STAGE_2_OPEN', 'COMPLETED'].includes(event.status)
+                      ? 'Kendaraan disiapkan'
+                      : 'Usulan kendaraan',
                   ],
                   [Wallet, `${paid}/${data.participants.length}`, 'Pembayaran terverifikasi'],
                 ].map(([Icon, n, label]) => {
                   const I = Icon as typeof Users;
                   return (
                     <div className="card" key={String(label)}>
-                      <I size={19} color="#859579" />
+                      <I size={20} className="stat-icon" />
                       <div className="stat">{String(n)}</div>
                       <span className="stat-label">{String(label)}</span>
                     </div>
@@ -206,7 +234,10 @@ export function EventManager({ data, tab, appUrl }: { data: Bundle; tab: string;
                 )}
               </div>
               {event.status === 'STAGE_1_CLOSED' && <Finalization data={data} act={act} />}
-              <PlanningAnalytics data={data} admin />
+              <PlanningAnalytics data={data} admin details={false} />
+              {['STAGE_1_CLOSED', 'STAGE_2_OPEN', 'COMPLETED'].includes(event.status) && (
+                <TransportRoster data={data} />
+              )}
             </>
           )}
           {tab === 'dates' && (
@@ -316,11 +347,15 @@ export function EventManager({ data, tab, appUrl }: { data: Bundle; tab: string;
           {tab === 'transport' && (
             <>
               <Notice>
-                {event.status !== 'STAGE_1_CLOSED'
+                {!['STAGE_1_CLOSED', 'STAGE_2_OPEN'].includes(event.status)
                   ? 'Transport dapat diatur setelah Stage 1 ditutup.'
                   : ''}
               </Notice>
-              <Transport data={data} act={act} locked={event.status !== 'STAGE_1_CLOSED'} />
+              <Transport
+                data={data}
+                act={act}
+                locked={!['STAGE_1_CLOSED', 'STAGE_2_OPEN'].includes(event.status)}
+              />
             </>
           )}
           {tab === 'participants' && (
@@ -451,83 +486,7 @@ export function EventManager({ data, tab, appUrl }: { data: Bundle; tab: string;
               </div>
             </>
           )}
-          {tab === 'payments' && (
-            <>
-              <h2>Pembayaran</h2>
-              <div className="grid grid-3 stats-grid">
-                {[
-                  ['Terverifikasi', paid],
-                  ['Menunggu', data.payments.filter((p) => p.status === 'PENDING').length],
-                  ['Belum submit', data.participants.length - data.payments.length],
-                ].map(([label, n]) => (
-                  <div className="card" key={label}>
-                    <div className="stat">{n}</div>
-                    <span className="stat-label">{label}</span>
-                  </div>
-                ))}
-              </div>
-              {data.payments.map((p) => (
-                <div className="card stack-sm" key={p.id}>
-                  <div className="row between">
-                    <h3>{data.participants.find((x) => x.id === p.participant_id)?.name}</h3>
-                    <span className="pill">{p.status}</span>
-                  </div>
-                  <p>
-                    {rupiah(p.amount)} · {prettyDate(p.submitted_at)}
-                  </p>
-                  {p.admin_note && <p>{p.admin_note}</p>}
-                  <div className="row">
-                    <Button
-                      variant="outline"
-                      onClick={async () => {
-                        try {
-                          const r = await api(`/api/admin/payments/${p.id}`);
-                          window.open(r.url, '_blank', 'noopener,noreferrer');
-                        } catch (e) {
-                          setError((e as Error).message);
-                        }
-                      }}
-                    >
-                      Lihat / unduh bukti
-                    </Button>
-                    {event.status === 'STAGE_2_OPEN' && p.status === 'PENDING' && (
-                      <>
-                        <Button
-                          onClick={() => {
-                            if (confirm('Verifikasi pembayaran ini?'))
-                              void act('payment_review', {
-                                id: p.id,
-                                status: 'VERIFIED',
-                                admin_note: '',
-                              });
-                          }}
-                        >
-                          Verifikasi
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          onClick={() => {
-                            const note = prompt('Alasan penolakan:');
-                            if (note)
-                              void act('payment_review', {
-                                id: p.id,
-                                status: 'REJECTED',
-                                admin_note: note,
-                              });
-                          }}
-                        >
-                          Tolak
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {!data.payments.length && (
-                <div className="empty">Belum ada bukti pembayaran yang masuk.</div>
-              )}
-            </>
-          )}
+          {tab === 'payments' && <PaymentsPanel data={data} act={act} locked={locked} />}
           {tab === 'settings' && (
             <>
               <form
@@ -541,7 +500,7 @@ export function EventManager({ data, tab, appUrl }: { data: Bundle; tab: string;
                     description: f.get('description'),
                     stage1_deadline: f.get('stage1_deadline'),
                     show_participant_list: f.get('show_participant_list') === 'on',
-                    show_transport_groups: f.get('show_transport_groups') === 'on',
+                    show_transport_groups: true,
                   });
                 }}
               >
@@ -581,15 +540,6 @@ export function EventManager({ data, tab, appUrl }: { data: Bundle; tab: string;
                     defaultChecked={event.show_participant_list}
                   />
                   Tampilkan daftar nama peserta
-                </label>
-                <label className="row">
-                  <Input
-                    disabled={locked}
-                    type="checkbox"
-                    name="show_transport_groups"
-                    defaultChecked={event.show_transport_groups}
-                  />
-                  Peserta dapat melihat semua kendaraan
                 </label>
                 <Button disabled={locked || busy}>Simpan pengaturan</Button>
               </form>
@@ -697,126 +647,93 @@ function Finalization({
   data: Bundle;
   act: (action: string, data: object) => Promise<unknown>;
 }) {
-  const [step, setStep] = useState(0);
+  const [saving, setSaving] = useState(false);
   const event = data.event;
+  const pairs = analytics(data).datePairs;
   return (
-    <form
-      className="card stack"
-      onSubmit={async (e) => {
-        e.preventDefault();
-        const f = new FormData(e.currentTarget);
-        if (!confirm('Simpan keputusan final villa, tanggal, dan pembayaran?')) return;
-        await act('finalize', {
-          ...Object.fromEntries(f),
-          cost_per_person: parseMoney(f.get('cost_per_person')),
-        });
-      }}
-    >
-      <span className="eyebrow">FINALISASI RENCANA</span>
-      <h2>Rencana final</h2>
-      <Progress value={(step + 1) * 20} className="h-1" aria-label="Progres finalisasi" />
-      <p style={{ fontSize: 12 }}>
-        Langkah {step + 1}:{' '}
-        {['Villa final', 'Tanggal final', 'Transport', 'Pembayaran', 'Review & simpan'][step]}
-      </p>
-      <div style={{ display: step === 0 ? 'block' : 'none' }}>
-        <label className="field">
-          Villa final
-          <select
-            name="final_villa_id"
-            defaultValue={event.final_villa_id || data.villas.find((v) => v.active)?.id}
-          >
-            {data.villas
-              .filter((v) => v.active)
-              .map((v) => (
-                <option value={v.id} key={v.id}>
-                  {v.name} — {data.votes.filter((x) => x.villa_id === v.id).length} suara
+    <section className="finalization-panel stack">
+      <div>
+        <span className="eyebrow">SEBELUM STAGE 2</span>
+        <h2>Siapkan rencana keberangkatan</h2>
+        <p>Lengkapi tiga bagian ini. Peserta memilih sendiri kursinya setelah Stage 2 dibuka.</p>
+      </div>
+      <form
+        className="card stack"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          const f = new FormData(e.currentTarget);
+          setSaving(true);
+          try {
+            await act('finalize', Object.fromEntries(f));
+          } finally {
+            setSaving(false);
+          }
+        }}
+      >
+        <h3>1. Tetapkan villa & tanggal</h3>
+        <div className="grid grid-2">
+          <label className="field">
+            Villa final
+            <select
+              name="final_villa_id"
+              defaultValue={event.final_villa_id || data.villas.find((v) => v.active)?.id}
+              required
+            >
+              {data.villas
+                .filter((v) => v.active)
+                .map((v) => (
+                  <option value={v.id} key={v.id}>
+                    {v.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label className="field">
+            Tanggal final
+            <select
+              name="final_date"
+              defaultValue={event.final_date || pairs[0]?.start.date}
+              required
+            >
+              {pairs.map((pair) => (
+                <option value={pair.start.date} key={pair.start.id}>
+                  {prettyDate(pair.start.date)} - {prettyDate(pair.end.date)}
                 </option>
               ))}
-          </select>
-        </label>
-      </div>
-      <div style={{ display: step === 1 ? 'block' : 'none' }}>
-        <label className="field">
-          Tanggal final
-          <select
-            name="final_date"
-            defaultValue={event.final_date || analytics(data).datePairs[0]?.start.date}
-            required
-          >
-            {analytics(data).datePairs.map((pair) => (
-              <option value={pair.start.date} key={pair.start.id}>
-                {prettyDate(pair.start.date)} – {prettyDate(pair.end.date)} · {pair.count} bisa di
-                kedua hari
-              </option>
-            ))}
-          </select>
-          {!analytics(data).datePairs.length && (
-            <small>Tambahkan minimal dua kandidat tanggal berurutan di fase Draft.</small>
-          )}
-        </label>
-      </div>
-      <div style={{ display: step === 2 ? 'block' : 'none' }}>
-        <p>
-          {data.members.length} dari {data.participants.length} peserta mendapat transport.
-        </p>
-        <Link className="text-link" href={`/admin/events/${event.id}/transport`}>
-          Susun kendaraan dan transport mandiri
+            </select>
+          </label>
+        </div>
+        <Button disabled={saving || !pairs.length}>
+          <CalendarDays size={16} />
+          {saving ? 'Menyimpan...' : 'Simpan keputusan final'}
+        </Button>
+      </form>
+      <div className="grid grid-2">
+        <Link className="setup-link" href={`/admin/events/${event.id}/transport`}>
+          <Car size={22} />
+          <h3>2. Siapkan kendaraan</h3>
+          <p>
+            {data.groups.filter((g) => g.type !== 'INDEPENDENT').length} kendaraan tersedia.
+            Tetapkan driver dan kapasitas; kursi penumpang dipilih peserta.
+          </p>
+          <span>
+            Kelola transport <ExternalLink size={14} />
+          </span>
+        </Link>
+        <Link className="setup-link" href={`/admin/events/${event.id}/payments`}>
+          <Wallet size={22} />
+          <h3>3. Biaya & rekening</h3>
+          <p>
+            {event.cost_per_person === null
+              ? 'Nominal belum diatur.'
+              : `${rupiah(event.cost_per_person)} per orang.`}{' '}
+            {event.bank_name || 'Tambahkan rekening tujuan.'}
+          </p>
+          <span>
+            Atur pembayaran <ExternalLink size={14} />
+          </span>
         </Link>
       </div>
-      <div className="stack-sm" style={{ display: step === 3 ? 'flex' : 'none' }}>
-        <label className="field">
-          Biaya per orang (Rp)
-          <MoneyInput name="cost_per_person" defaultValue={event.cost_per_person || 0} />
-          {data.payments.length > 0 && (
-            <small>Biaya tidak dapat diubah setelah ada pembayaran.</small>
-          )}
-        </label>
-        {[
-          ['bank_name', 'Nama bank', 'text'],
-          ['bank_account_number', 'Nomor rekening', 'text'],
-          ['bank_account_holder', 'Nama pemilik rekening', 'text'],
-          ['stage2_deadline', 'Deadline pembayaran (WIB, opsional)', 'datetime-local'],
-        ].map(([name, label, type]) => (
-          <label className="field" key={name}>
-            {label}
-            <Input
-              name={name}
-              type={type}
-              defaultValue={
-                name === 'stage2_deadline'
-                  ? inputDateTime(event.stage2_deadline)
-                  : String(event[name as keyof typeof event] ?? '')
-              }
-            />
-          </label>
-        ))}
-        <label className="field">
-          Catatan pembayaran
-          <Textarea name="payment_note" defaultValue={event.payment_note || ''} />
-        </label>
-      </div>
-      {step === 4 && (
-        <div className="notice">
-          Simpan keputusan final, lalu klik “Publish Stage 2” di atas. Semua peserta harus mendapat
-          transport terlebih dahulu.
-        </div>
-      )}
-      <div className="row between">
-        <Button variant="ghost" type="button" disabled={!step} onClick={() => setStep(step - 1)}>
-          Kembali
-        </Button>
-        {step < 4 ? (
-          <Button key="next-step" type="button" onClick={() => setStep(step + 1)}>
-            Lanjut
-          </Button>
-        ) : (
-          <Button key="save-final" type="submit">
-            <CalendarDays size={16} />
-            Simpan keputusan final
-          </Button>
-        )}
-      </div>
-    </form>
+    </section>
   );
 }

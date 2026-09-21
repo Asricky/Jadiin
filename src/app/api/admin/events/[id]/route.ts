@@ -1,3 +1,4 @@
+import { appOrigin } from '@/lib/app-origin';
 import { NextResponse } from 'next/server';
 import { actions } from '@/lib/validation';
 import { bundle, errorResponse, ownedEvent, sameOrigin, HttpError } from '@/lib/server';
@@ -36,7 +37,7 @@ export async function POST(req: Request, ctx: Ctx) {
     if (body.action === 'rotate_token') {
       const token = newToken();
       data = { ...parsed, hash: hashToken(token) };
-      access_url = `${process.env.NEXT_PUBLIC_APP_URL}/e/${event.slug}/p/${token}`;
+      access_url = `${appOrigin()}/e/${event.slug}/p/${token}`;
     }
     const { data: result, error } = await db.rpc('admin_action', {
       p_event: event.id,

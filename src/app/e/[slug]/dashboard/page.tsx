@@ -1,3 +1,4 @@
+import { appOrigin } from '@/lib/app-origin';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { publicEvent, bundle } from '@/lib/server';
@@ -30,7 +31,7 @@ export default async function Dashboard({ params }: { params: Promise<{ slug: st
         </p>
         <div>
           <CopyButton
-            value={`${process.env.NEXT_PUBLIC_APP_URL}/e/${slug}/p/${p.token}`}
+            value={`${appOrigin()}/e/${slug}/p/${p.token}`}
             label="Salin link akses pribadi"
           />
         </div>

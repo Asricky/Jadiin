@@ -17,7 +17,7 @@ export const phases: { status: Status; label: string; description: string }[] = 
   {
     status: 'STAGE_2_OPEN',
     label: 'Pembayaran',
-    description: 'Peserta melihat rencana final dan mengirim bukti bayar.',
+    description: 'Peserta memilih kursi kendaraan dan mengirim bukti bayar.',
   },
   {
     status: 'COMPLETED',

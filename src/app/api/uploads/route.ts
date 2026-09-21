@@ -24,7 +24,7 @@ export async function POST(req: Request) {
         participantId = p.id;
         const { data: e } = await db
           .from('events')
-          .select('status,stage2_deadline')
+          .select('status,stage2_deadline,cost_per_person')
           .eq('id', input.event_id)
           .single();
         if (
@@ -32,6 +32,8 @@ export async function POST(req: Request) {
           (e.stage2_deadline && new Date(e.stage2_deadline) < new Date())
         )
           throw new HttpError('Pembayaran ditutup');
+        if (input.expected_amount === undefined || input.expected_amount !== e.cost_per_person)
+          throw new HttpError('Nominal berubah. Muat ulang halaman untuk melihat tagihan terbaru.');
         const { data: pay } = await db
           .from('payments')
           .select('status')
@@ -51,6 +53,7 @@ export async function POST(req: Request) {
           mime: input.mime,
           size: input.size,
           kind: input.kind,
+          amount: input.kind === 'payment' ? input.expected_amount : null,
         })
         .select('id')
         .single();

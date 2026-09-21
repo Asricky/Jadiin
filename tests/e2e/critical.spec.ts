@@ -289,15 +289,17 @@ test('real database: admin → participant → transport → private proof → v
     await page.getByRole('button', { name: 'Tambahkan kendaraan' }).click();
     await expect(page.getByRole('heading', { name: /Mobil Teman E2E/ })).toBeVisible();
     await page.getByRole('link', { name: 'Ringkasan', exact: true }).click();
-    for (let i = 0; i < 3; i++)
-      await page.getByRole('button', { name: 'Lanjut', exact: true }).click();
+    await page.getByRole('button', { name: 'Simpan keputusan final' }).click();
+    await expect(page.getByText('Perubahan tersimpan.')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Ketersediaan peserta' })).toHaveCount(0);
+    await page.getByRole('link', { name: 'Pembayaran', exact: true }).click();
     await page.getByLabel('Biaya per orang').fill('350000');
     await page.getByLabel('Nama bank').fill('BCA');
     await page.getByLabel('Nomor rekening').fill('1234567890');
     await page.getByLabel('Nama pemilik rekening').fill('E2E Organizer');
-    await page.getByRole('button', { name: 'Lanjut', exact: true }).click();
-    await page.getByRole('button', { name: 'Simpan keputusan final' }).click();
-    await expect(page.getByText('Perubahan tersimpan.')).toBeVisible();
+    await page.getByRole('button', { name: 'Simpan biaya & rekening' }).click();
+    await expect(page.locator('.status-NOT_SUBMITTED')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Ubah nominal & rekening' })).toBeVisible();
     await page.getByRole('button', { name: 'Publish Stage 2', exact: true }).click();
     await page.getByRole('button', { name: 'Ya, ubah fase' }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -312,6 +314,7 @@ test('real database: admin → participant → transport → private proof → v
       data: {
         action: 'sign',
         kind: 'payment',
+        expected_amount: 350000,
         event_id: eventId,
         mime: 'image/png',
         size: 5242881,
@@ -324,6 +327,7 @@ test('real database: admin → participant → transport → private proof → v
       data: {
         action: 'sign',
         kind: 'payment',
+        expected_amount: 350000,
         event_id: eventId,
         mime: 'image/png',
         size: badFile.length,
@@ -362,7 +366,7 @@ test('real database: admin → participant → transport → private proof → v
     expect(preview.ok()).toBe(true);
     expect((await page.request.get((await preview.json()).url)).ok()).toBe(true);
     await page.getByRole('button', { name: 'Tolak', exact: true }).click();
-    await expect(page.getByText('REJECTED', { exact: true })).toBeVisible();
+    await expect(page.locator('.status-REJECTED')).toBeVisible();
     await participant.goto(`/e/${slug}/stage-2`);
     await expect(participant.getByText('Bukti kurang jelas', { exact: true })).toBeVisible();
     await participant
@@ -371,7 +375,13 @@ test('real database: admin → participant → transport → private proof → v
     await expect(participant).toHaveURL(/thank-you$/);
     await page.reload();
     await page.getByRole('button', { name: 'Verifikasi', exact: true }).click();
-    await expect(page.getByText('VERIFIED', { exact: true })).toBeVisible();
+    await expect(page.locator('.status-VERIFIED')).toBeVisible();
+    await page.getByRole('button', { name: 'Ubah nominal & rekening' }).click();
+    await page.getByLabel('Biaya per orang').fill('400000');
+    await page.getByRole('button', { name: 'Simpan biaya & rekening' }).click();
+    await expect(page.locator('.billing-amount')).toContainText('400.000');
+    await expect(page.locator('.money-stat.received')).toContainText('350.000');
+    await page.screenshot({ path: 'test-results/payments-desktop.png', fullPage: true });
     const rotated = await page.request.post(`/api/admin/events/${eventId}`, {
       headers: { Origin: appUrl },
       data: { action: 'rotate_token', data: { id: p.id } },
@@ -395,14 +405,15 @@ test('real database: admin → participant → transport → private proof → v
       data: {
         action: 'sign',
         kind: 'payment',
+        expected_amount: 350000,
         event_id: eventId,
         mime: 'image/png',
         size: png.length,
       },
     });
     expect(lockedUpload.ok()).toBe(false);
-    await page.getByRole('button',{name:'Arsipkan acara',exact:true}).click();
-    await page.getByRole('button',{name:'Ya, ubah fase'}).click();
+    await page.getByRole('button', { name: 'Arsipkan acara', exact: true }).click();
+    await page.getByRole('button', { name: 'Ya, ubah fase' }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await expect(page.locator('.badge-ARCHIVED')).toBeVisible();
     for (const target of ['Selesai', 'Pembayaran', 'Finalisasi', 'Voting', 'Draft']) {
@@ -544,9 +555,11 @@ test('RLS, RPC isolation, transaction rollback, capacity and token rotation', as
       ids.push(pid);
     }
     expect((await b.from('participants').select('*').eq('event_id', e)).data).toEqual([]);
-    expect((await b.from('event_phase_history').select('*').eq('event_id',e)).data).toEqual([]);
-    expect((await a.from('event_phase_history').select('*').eq('event_id',e)).data).toHaveLength(1);
-    expect((await act(b,e,'status',{status:'DRAFT'})).error).toBeTruthy();
+    expect((await b.from('event_phase_history').select('*').eq('event_id', e)).data).toEqual([]);
+    expect((await a.from('event_phase_history').select('*').eq('event_id', e)).data).toHaveLength(
+      1,
+    );
+    expect((await act(b, e, 'status', { status: 'DRAFT' })).error).toBeTruthy();
     await act(a, e, 'status', { status: 'STAGE_1_CLOSED' });
     const { data: gid, error: groupError } = await act(a, e, 'group', {
       type: 'MOTORCYCLE',

@@ -1,17 +1,31 @@
-﻿import { DateGrid } from './date-grid';
+import { DateGrid } from './date-grid';
 import { VillaCard } from './villa-card';
 import { prettyDate } from '@/lib/utils';
 import type { Bundle } from '@/types/domain';
 import { analytics } from '@/lib/planning';
-export function PlanningAnalytics({ data, admin = false }: { data: Bundle; admin?: boolean }) {
+export function PlanningAnalytics({
+  data,
+  admin = false,
+  details = true,
+}: {
+  data: Bundle;
+  admin?: boolean;
+  details?: boolean;
+}) {
   const a = analytics(data);
-  const pair = a.leadingPairs[0];
+  const finalized = ['STAGE_2_OPEN', 'COMPLETED'].includes(data.event.status);
+  const pair = finalized
+    ? a.datePairs.find((p) => p.start.date === data.event.final_date)
+    : a.leadingPairs[0];
+  const displayedVillas = finalized
+    ? data.villas.filter((v) => v.id === data.event.final_villa_id)
+    : a.leadingVillas;
   return (
     <div className="stack">
       <div className="grid grid-2 planning-grid">
         <section className="card stack">
           <div className="stack-sm">
-            <h3>Perkiraan tanggal</h3>
+            <h3>{finalized ? 'Tanggal acara' : 'Perkiraan tanggal'}</h3>
             {pair ? (
               <>
                 <strong className="text-xl">
@@ -24,7 +38,7 @@ export function PlanningAnalytics({ data, admin = false }: { data: Bundle; admin
                   {pair.count} dari {data.participants.length} peserta bisa di kedua hari. 2 hari, 1
                   malam.
                 </p>
-                {a.leadingPairs.length > 1 && (
+                {details && !finalized && a.leadingPairs.length > 1 && (
                   <details>
                     <summary className="text-sm text-link">
                       {a.leadingPairs.length} pilihan tanggal dengan hasil imbang
@@ -51,28 +65,32 @@ export function PlanningAnalytics({ data, admin = false }: { data: Bundle; admin
             value={pair ? [pair.start.id, pair.end.id] : []}
           />
           <small className="muted">
-            Angka: peserta yang bisa per hari. Biru pekat berarti lebih banyak peserta. Garis biru:
-            pasangan tanggal teratas.
+            Angka: peserta yang bisa per hari. Warna lebih pekat berarti lebih banyak peserta. Garis
+            hijau: pasangan tanggal teratas.
           </small>
         </section>
         <section className="stack-sm">
           <div className="row between">
-            <h3>Villa favorit sementara</h3>
-            {a.maxVilla > 0 && <span className="pill">{a.maxVilla} suara</span>}
+            <h3>{finalized ? 'Villa acara' : 'Villa favorit sementara'}</h3>
+            {finalized ? (
+              <span className="pill">Pilihan final</span>
+            ) : (
+              a.maxVilla > 0 && <span className="pill">{a.maxVilla} suara</span>
+            )}
           </div>
-          {a.leadingVillas.length ? (
-            a.leadingVillas.map((v) => <VillaCard key={v.id} villa={v} images={data.images} />)
+          {displayedVillas.length ? (
+            displayedVillas.map((v) => <VillaCard key={v.id} villa={v} images={data.images} />)
           ) : (
             <div className="empty">Belum ada suara masuk.</div>
           )}
-          {a.leadingVillas.length > 1 && (
+          {!finalized && a.leadingVillas.length > 1 && (
             <small className="muted">
               Jumlah suara masih imbang. Keputusan final ditetapkan organizer.
             </small>
           )}
         </section>
       </div>
-      {(data.event.show_participant_list || admin) && (
+      {details && (data.event.show_participant_list || admin) && (
         <section className="card stack-sm">
           <div className="row between">
             <h3>Sudah mengisi</h3>
@@ -94,7 +112,7 @@ export function PlanningAnalytics({ data, admin = false }: { data: Bundle; admin
           )}
         </section>
       )}
-      {admin && (
+      {admin && details && (
         <>
           <section className="card stack">
             <h3>Ketersediaan peserta</h3>

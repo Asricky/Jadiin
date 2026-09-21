@@ -1,3 +1,4 @@
+import { appOrigin } from '@/lib/app-origin';
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase/server';
 export async function GET(req: Request) {
@@ -9,7 +10,7 @@ export async function GET(req: Request) {
       return NextResponse.redirect(
         new URL(
           url.searchParams.get('next') === '/reset-password' ? '/reset-password' : '/admin/events',
-          process.env.NEXT_PUBLIC_APP_URL || url.origin,
+          appOrigin(),
         ),
       );
   }

@@ -1,3 +1,4 @@
+import { appOrigin } from '@/lib/app-origin';
 import { NextResponse } from 'next/server';
 import { stage1Schema } from '@/lib/validation';
 import { errorResponse, publicEvent, sameOrigin, rate } from '@/lib/server';
@@ -21,7 +22,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     await setSession(event.id, token);
     return NextResponse.json({
       url: `/e/${event.slug}/dashboard`,
-      access_url: `${process.env.NEXT_PUBLIC_APP_URL}/e/${event.slug}/p/${token}`,
+      access_url: `${appOrigin()}/e/${event.slug}/p/${token}`,
     });
   } catch (e) {
     return errorResponse(e);

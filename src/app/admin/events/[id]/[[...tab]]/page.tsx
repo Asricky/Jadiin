@@ -1,3 +1,4 @@
+import { appOrigin } from '@/lib/app-origin';
 import { notFound } from 'next/navigation';
 import { ownedEvent, bundle, HttpError } from '@/lib/server';
 import { EventManager } from '@/components/event-manager';
@@ -19,11 +20,5 @@ export default async function Manage({
     if (e instanceof HttpError && e.status === 404) notFound();
     throw e;
   });
-  return (
-    <EventManager
-      data={await bundle(event, true)}
-      tab={active}
-      appUrl={process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}
-    />
-  );
+  return <EventManager data={await bundle(event, true)} tab={active} appUrl={appOrigin()} />;
 }

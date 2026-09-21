@@ -129,8 +129,8 @@ export function DateGrid({
                       style={
                         counts
                           ? {
-                              outline: value?.includes(d.id) ? '2px solid #2563eb' : undefined,
-                              background: `rgba(37,99,235,${0.04 + 0.28 * (total ? count / total : 0)})`,
+                              outline: value?.includes(d.id) ? '2px solid #285b4d' : undefined,
+                              background: `rgba(40,91,77,${0.04 + 0.28 * (total ? count / total : 0)})`,
                             }
                           : undefined
                       }

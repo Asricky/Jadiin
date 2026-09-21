@@ -1,3 +1,4 @@
+import { appOrigin } from '@/lib/app-origin';
 import 'server-only';
 import { NextResponse } from 'next/server';
 import { ZodError } from 'zod';
@@ -129,8 +130,12 @@ export function errorResponse(error: unknown) {
   return NextResponse.json({ error: 'Terjadi gangguan. Silakan coba lagi.' }, { status: 500 });
 }
 export function sameOrigin(req: Request) {
-  const expected = new URL(process.env.NEXT_PUBLIC_APP_URL || req.url).origin;
-  if (req.headers.get('origin') !== expected) throw new HttpError('Origin tidak diizinkan', 403);
+  const expected = new URL(appOrigin()).origin;
+  if (
+    req.headers.get('origin') !== expected &&
+    req.headers.get('origin') !== new URL(req.url).origin
+  )
+    throw new HttpError('Origin tidak diizinkan', 403);
 }
 export async function rate(req: Request, scope: string, limit = 30) {
   const ip =

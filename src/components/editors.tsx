@@ -26,7 +26,10 @@ export function DatesEditor({
   return (
     <div className="card stack">
       <h3>Pilih tanggal yang mungkin</h3>
-      <p>Tambahkan rentang maksimal 90 hari. Sertakan dua tanggal berurutan untuk acara 2 hari 1 malam.</p>
+      <p>
+        Tambahkan rentang maksimal 90 hari. Sertakan dua tanggal berurutan untuk acara 2 hari 1
+        malam.
+      </p>
       <div className="grid grid-2">
         <label className="field">
           Dari tanggal

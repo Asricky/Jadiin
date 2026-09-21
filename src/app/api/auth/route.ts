@@ -1,3 +1,4 @@
+import { appOrigin } from '@/lib/app-origin';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { supabase } from '@/lib/supabase/server';
@@ -27,7 +28,7 @@ export async function POST(req: Request) {
     } else if (b.mode === 'forgot') {
       if (!b.email) throw new HttpError('Email diperlukan');
       await db.auth.resetPasswordForEmail(b.email, {
-        redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback?next=/reset-password`,
+        redirectTo: `${appOrigin()}/auth/callback?next=/reset-password`,
       });
       message = 'Jika email terdaftar, link reset sudah dikirim.';
     } else if (b.mode === 'register') {
@@ -38,7 +39,7 @@ export async function POST(req: Request) {
         password: b.password,
         options: {
           data: { display_name: b.name },
-          emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+          emailRedirectTo: `${appOrigin()}/auth/callback`,
         },
       });
       if (error) throw new HttpError(error.message);

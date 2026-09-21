@@ -45,39 +45,37 @@ export function EventsList({
         </TabsList>
         <TabsContent value={tab}>
           {shown.length ? (
-            <div className="event-list">
+            <div className="event-grid">
               {shown.map((e) => (
-                <Link key={e.id} href={`/admin/events/${e.id}`} className="event-row">
-                  <div className="event-thumbnail">
-                    {e.cover_path ? (
-                      <img src={mediaUrl(e.cover_path)!} alt="" />
-                    ) : (
-                      <CalendarDays size={25} strokeWidth={1.5} />
-                    )}
-                  </div>
-                  <div className="event-row-body">
+                <Link key={e.id} href={`/admin/events/${e.id}`} className="event-tile">
+                  {e.cover_path && (
+                    <img className="event-tile-photo" src={mediaUrl(e.cover_path)!} alt="" />
+                  )}
+                  <div className="event-tile-body">
                     <div className="row between">
-                      <h3>{e.name}</h3>
+                      <span className="event-symbol">
+                        <CalendarDays size={22} />
+                      </span>
                       <span className={`badge badge-${e.status}`}>{statusLabel[e.status]}</span>
                     </div>
-                    <p className="line-clamp-1 text-sm mt-1">
+                    <h3>{e.name}</h3>
+                    <p className="line-clamp-2">
                       {e.description || 'Lengkapi detail dan mulai mengumpulkan jawaban.'}
                     </p>
-                    <div className="event-meta">
+                    <div className="event-tile-date">
+                      <CalendarDays size={14} />
+                      {e.final_date ? prettyDate(e.final_date) : 'Tanggal belum ditetapkan'}
+                    </div>
+                    <div className="event-tile-footer">
                       <span className="row">
-                        <Users size={14} />
+                        <Users size={15} />
                         {e.participants[0]?.count || 0} peserta
                       </span>
                       <span>
-                        {e.final_date
-                          ? prettyDate(e.final_date)
-                          : e.stage1_deadline
-                            ? `Batas voting ${prettyDate(e.stage1_deadline)}`
-                            : 'Tanggal belum ditetapkan'}
+                        Kelola acara <ArrowUpRight size={16} />
                       </span>
                     </div>
                   </div>
-                  <ArrowUpRight className="hide-mobile" size={18} />
                 </Link>
               ))}
             </div>
