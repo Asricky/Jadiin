@@ -70,7 +70,7 @@ export function CreateWizard() {
           <label className="field">
             Link acara
             <Input required {...register('slug')} placeholder="makrab-cerita-kita" />
-            <small>makrabplanner / e / nama-acara</small>
+            <small>Link peserta: /e/nama-acara</small>
           </label>
           <label className="field">
             Deskripsi

@@ -106,7 +106,8 @@ test('real database: admin → participant → transport → private proof → v
     ]);
     await expect(page.getByText('3 dari 3 foto berhasil diunggah')).toBeVisible();
     await expect(page.getByText('1 file non-foto di dalam ZIP dilewati.')).toBeVisible();
-    await expect(page.getByRole('img', { name: /Berhasil diunggah:/ })).toHaveCount(3);
+    await expect(page.locator('.photo-grid img')).toHaveCount(3);
+    await expect(page.getByRole('img', { name: /Berhasil diunggah:/ })).toHaveCount(0);
     await page.getByRole('button', { name: 'Jadikan foto 2 cover', exact: true }).click();
     await expect(
       page.getByRole('button', { name: 'Jadikan foto 2 cover', exact: true }),
@@ -116,6 +117,40 @@ test('real database: admin → participant → transport → private proof → v
     await page.getByRole('button', { name: 'Selesai, kembali ke acara' }).click();
     await expect(page).toHaveURL(/admin\/events\/[a-f0-9-]+$/);
     eventId = page.url().split('/').pop()!;
+
+    // Editing keeps the gallery alongside the details and protects unsaved input.
+    await page.goto(`/admin/events/${eventId}/villas`);
+    await page.getByRole('button', { name: 'Edit & galeri', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Edit villa', exact: true })).toBeVisible();
+    await expect(page.locator('.photo-grid img')).toHaveCount(3);
+    const media = await page.locator('.villa-editor-media').boundingBox();
+    const details = await page.locator('.villa-editor-details').boundingBox();
+    expect(media!.x + media!.width).toBeLessThanOrEqual(details!.x);
+    await page.getByLabel('Alamat', { exact: true }).fill('Jl. Pengujian No. 10, Bandung updated');
+    page.once('dialog', (dialog) => dialog.dismiss());
+    await page.getByRole('button', { name: 'Selesai, kembali ke acara' }).click();
+    await expect(page.getByLabel('Alamat', { exact: true })).toHaveValue(
+      'Jl. Pengujian No. 10, Bandung updated',
+    );
+    await page.getByLabel('Alamat', { exact: true }).fill('Jl. Pengujian No. 10, Bandung');
+    await page.getByRole('button', { name: 'Simpan villa', exact: true }).click();
+    await expect(page.getByText('Villa tersimpan.', { exact: true })).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    const mobileMedia = await page.locator('.villa-editor-media').boundingBox();
+    const mobileDetails = await page.locator('.villa-editor-details').boundingBox();
+    expect(mobileMedia!.y + mobileMedia!.height).toBeLessThanOrEqual(mobileDetails!.y);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+    await page.locator('.villa-editor').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: 'test-results/villa-editor-mobile.png', fullPage: true });
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.locator('.villa-editor').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: 'test-results/villa-editor-desktop.png', fullPage: true });
+    await page.getByRole('button', { name: 'Selesai, kembali ke acara' }).click();
+    await expect(page.getByRole('button', { name: 'Edit & galeri', exact: true })).toBeVisible();
+    await page.goto(`/admin/events/${eventId}`);
+
     page.on('dialog', (dialog) =>
       dialog.accept(dialog.type() === 'prompt' ? 'Bukti kurang jelas' : undefined),
     );

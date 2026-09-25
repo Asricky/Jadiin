@@ -256,7 +256,7 @@ export function EventManager({ data, tab, appUrl }: { data: Bundle; tab: string;
             <>
               <div className="row between">
                 <h2>Pilihan villa</h2>
-                {!locked && event.status !== 'STAGE_2_OPEN' && (
+                {!locked && event.status !== 'STAGE_2_OPEN' && !addVilla && !editing && (
                   <Button
                     onClick={() => {
                       setEditing(undefined);
@@ -281,64 +281,66 @@ export function EventManager({ data, tab, appUrl }: { data: Bundle; tab: string;
                   }}
                 />
               )}
-              {data.villas.map((v) => (
-                <div className="card stack-sm" key={v.id}>
-                  <div className="row between">
-                    <h3>{v.name}</h3>
-                    <span className="pill">
-                      {v.active ? 'Aktif' : 'Nonaktif'} · urutan {v.sort_order}
-                    </span>
-                  </div>
-                  <p>
-                    {rupiah(v.price)} · {v.capacity} orang ·{' '}
-                    {data.votes.filter((x) => x.villa_id === v.id).length} suara
-                  </p>
-                  <VillaCard villa={v} images={data.images} />
-                  <p style={{ fontSize: 12 }}>
-                    Pemilih:{' '}
-                    {data.participants
-                      .filter((p) =>
-                        data.votes.some(
-                          (vote) => vote.villa_id === v.id && vote.participant_id === p.id,
-                        ),
-                      )
-                      .map((p) => p.name)
-                      .join(', ') || 'Belum ada'}
-                  </p>
-                  {!locked && event.status !== 'STAGE_2_OPEN' && (
-                    <div className="row">
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          setEditing(v);
-                          setAddVilla(false);
-                        }}
-                      >
-                        Edit & galeri
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        onClick={() => void act('villa', { ...v, active: !v.active })}
-                      >
-                        {v.active ? 'Nonaktifkan' : 'Aktifkan'}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        onClick={() => {
-                          if (
-                            confirm(
-                              `Hapus ${v.name}? Villa yang sudah dipilih peserta tidak dapat dihapus.`,
-                            )
-                          )
-                            void act('delete_villa', { id: v.id });
-                        }}
-                      >
-                        Hapus
-                      </Button>
+              {!addVilla &&
+                !editing &&
+                data.villas.map((v) => (
+                  <div className="card stack-sm" key={v.id}>
+                    <div className="row between">
+                      <h3>{v.name}</h3>
+                      <span className="pill">
+                        {v.active ? 'Aktif' : 'Nonaktif'} · urutan {v.sort_order}
+                      </span>
                     </div>
-                  )}
-                </div>
-              ))}
+                    <p>
+                      {rupiah(v.price)} · {v.capacity} orang ·{' '}
+                      {data.votes.filter((x) => x.villa_id === v.id).length} suara
+                    </p>
+                    <VillaCard villa={v} images={data.images} />
+                    <p style={{ fontSize: 12 }}>
+                      Pemilih:{' '}
+                      {data.participants
+                        .filter((p) =>
+                          data.votes.some(
+                            (vote) => vote.villa_id === v.id && vote.participant_id === p.id,
+                          ),
+                        )
+                        .map((p) => p.name)
+                        .join(', ') || 'Belum ada'}
+                    </p>
+                    {!locked && event.status !== 'STAGE_2_OPEN' && (
+                      <div className="row">
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setEditing(v);
+                            setAddVilla(false);
+                          }}
+                        >
+                          Edit & galeri
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          onClick={() => void act('villa', { ...v, active: !v.active })}
+                        >
+                          {v.active ? 'Nonaktifkan' : 'Aktifkan'}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          onClick={() => {
+                            if (
+                              confirm(
+                                `Hapus ${v.name}? Villa yang sudah dipilih peserta tidak dapat dihapus.`,
+                              )
+                            )
+                              void act('delete_villa', { id: v.id });
+                          }}
+                        >
+                          Hapus
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ))}
               {!data.villas.length && !addVilla && (
                 <div className="empty">Belum ada villa. Tambahkan pilihan pertama.</div>
               )}

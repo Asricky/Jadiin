@@ -1,6 +1,6 @@
 'use client';
 /* eslint-disable @next/next/no-img-element */
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { CheckCircle2, ImagePlus, LoaderCircle, AlertCircle } from 'lucide-react';
 import { api, mediaUrl } from '@/lib/utils';
 import { preparePhotos } from '@/lib/media';
@@ -19,11 +19,17 @@ export function UploadField({
   onDone,
   onUploaded,
   amount,
+  disabled = false,
+  showPreviews = true,
+  onBusyChange,
 }: {
   eventId: string;
   kind: 'media' | 'payment';
   amount?: number;
   villaId?: string;
+  disabled?: boolean;
+  showPreviews?: boolean;
+  onBusyChange?: (busy: boolean) => void;
   onDone: () => void;
   onUploaded?: (image: VillaImage, cover: string | null) => void;
 }) {
@@ -31,10 +37,15 @@ export function UploadField({
   const [error, setError] = useState('');
   const [items, setItems] = useState<Item[]>([]);
   const [skipped, setSkipped] = useState<string[]>([]);
+  const inFlight = useRef(false);
   async function upload(input: File[]) {
+    if (inFlight.current || disabled || !input.length) return;
+    inFlight.current = true;
     setBusy(true);
+    onBusyChange?.(true);
     setError('');
     setSkipped([]);
+    setItems([]);
     let succeeded = false;
     try {
       const prepared =
@@ -78,17 +89,20 @@ export function UploadField({
     } catch (error) {
       setError((error as Error).message);
     } finally {
+      inFlight.current = false;
       setBusy(false);
+      onBusyChange?.(false);
     }
   }
   return (
     <div className="stack-sm">
       <label
-        className={`upload-box ${busy ? 'is-busy' : ''}`}
+        className={`upload-box ${busy || disabled ? 'is-busy' : ''}`}
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => {
           e.preventDefault();
-          if (!busy && e.dataTransfer.files.length) void upload(Array.from(e.dataTransfer.files));
+          if (!busy && !disabled && e.dataTransfer.files.length)
+            void upload(Array.from(e.dataTransfer.files));
         }}
       >
         <ImagePlus size={24} />
@@ -116,7 +130,7 @@ export function UploadField({
               ? '.jpg,.jpeg,.png,.webp,.zip,image/jpeg,image/png,image/webp,application/zip'
               : 'image/jpeg,image/png,image/webp'
           }
-          disabled={busy}
+          disabled={busy || disabled}
           onChange={(e) => {
             const files = Array.from(e.target.files || []);
             e.target.value = '';
@@ -136,35 +150,37 @@ export function UploadField({
             diunggah
           </p>
           <div className="upload-previews">
-            {items.map((item, index) => (
-              <div className="upload-preview" key={index}>
-                {item.status === 'done' && kind === 'media' ? (
-                  <img src={mediaUrl(item.path!)!} alt={`Berhasil diunggah: ${item.name}`} />
-                ) : (
-                  <div className="upload-placeholder">
-                    {item.status === 'error' ? (
-                      <AlertCircle />
-                    ) : item.status === 'done' ? (
-                      <CheckCircle2 />
-                    ) : (
-                      <LoaderCircle className={item.status === 'uploading' ? 'spin' : ''} />
-                    )}
+            {items.map((item, index) =>
+              !showPreviews && item.status === 'done' ? null : (
+                <div className="upload-preview" key={index}>
+                  {item.status === 'done' && kind === 'media' ? (
+                    <img src={mediaUrl(item.path!)!} alt={`Berhasil diunggah: ${item.name}`} />
+                  ) : (
+                    <div className="upload-placeholder">
+                      {item.status === 'error' ? (
+                        <AlertCircle />
+                      ) : item.status === 'done' ? (
+                        <CheckCircle2 />
+                      ) : (
+                        <LoaderCircle className={item.status === 'uploading' ? 'spin' : ''} />
+                      )}
+                    </div>
+                  )}
+                  <div>
+                    <span title={item.name}>{item.name}</span>
+                    <small className={item.status === 'error' ? 'text-error' : ''}>
+                      {item.status === 'done'
+                        ? 'Berhasil'
+                        : item.status === 'error'
+                          ? item.error
+                          : item.status === 'uploading'
+                            ? 'Mengunggah…'
+                            : 'Dalam antrean'}
+                    </small>
                   </div>
-                )}
-                <div>
-                  <span title={item.name}>{item.name}</span>
-                  <small className={item.status === 'error' ? 'text-error' : ''}>
-                    {item.status === 'done'
-                      ? 'Berhasil'
-                      : item.status === 'error'
-                        ? item.error
-                        : item.status === 'uploading'
-                          ? 'Mengunggah…'
-                          : 'Dalam antrean'}
-                  </small>
                 </div>
-              </div>
-            ))}
+              ),
+            )}
           </div>
         </div>
       )}

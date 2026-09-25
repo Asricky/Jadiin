@@ -663,6 +663,87 @@ input[type='checkbox'] {
   gap: 4px;
   padding: 8px;
 }
+.villa-editor {
+  scroll-margin-top: 24px;
+}
+.villa-editor-layout {
+  display: grid;
+  gap: 28px;
+  align-items: start;
+  min-width: 0;
+}
+.villa-editor-details {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.villa-editor-media {
+  min-width: 0;
+  padding: 20px;
+  background: #f5f6ef;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.villa-editor-media .photo-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.villa-editor-media .photo-actions {
+  padding: 6px;
+}
+.villa-editor-media .photo-actions .button {
+  padding: 6px;
+  gap: 4px;
+  font-size: 11px;
+  min-height: 36px;
+}
+.villa-editor-media .photo-actions .button-icon {
+  width: 36px;
+  flex-shrink: 0;
+}
+.villa-photo-empty {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+.villa-editor-footer {
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+}
+.upload-box:focus-within {
+  outline: 2px solid #285b4d;
+  outline-offset: 3px;
+}
+.upload-box.is-busy {
+  opacity: 0.65;
+  cursor: wait;
+}
+@media (min-width: 1100px) {
+  .villa-editor-layout {
+    grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.1fr);
+  }
+  .villa-editor-media {
+    max-height: calc(100dvh - 48px);
+    overflow-y: auto;
+  }
+}
+@media (max-width: 600px) {
+  .villa-editor-media {
+    padding: 14px;
+  }
+  .villa-editor-footer > .row,
+  .villa-editor-footer > .row > .row {
+    width: 100%;
+  }
+  .villa-editor-footer .button {
+    flex: 1;
+    white-space: normal;
+  }
+}
 .money-field {
   position: relative;
 }
