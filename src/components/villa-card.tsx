@@ -1,12 +1,137 @@
 ﻿'use client';
 /* eslint-disable @next/next/no-img-element */
-import { useState } from 'react';
-import { House, MapPin, Users, Check, ExternalLink } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { House, MapPin, Users, Check, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { mediaUrl, rupiah } from '@/lib/utils';
 import type { Villa, VillaImage } from '@/types/domain';
+
+function VillaGallery({ paths, name }: { paths: string[]; name: string }) {
+  const [active, setActive] = useState(0);
+  const viewport = useRef<HTMLDivElement>(null);
+  const thumbs = useRef<HTMLDivElement>(null);
+  function select(index: number) {
+    const track = viewport.current;
+    if (!track) return;
+    const next = Math.max(0, Math.min(paths.length - 1, index));
+    track.scrollTo({
+      left: next * track.clientWidth,
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        ? 'instant'
+        : 'smooth',
+    });
+  }
+  return (
+    <section className="villa-slider stack-sm" aria-label={`Galeri ${name}`}>
+      <div className="villa-slider-frame">
+        <div
+          ref={viewport}
+          className="villa-slider-track"
+          role="region"
+          aria-roledescription="carousel"
+          aria-label="Foto villa, gunakan tombol panah kiri atau kanan"
+          tabIndex={0}
+          onKeyDown={(event) => {
+            const index =
+              event.key === 'ArrowLeft'
+                ? active - 1
+                : event.key === 'ArrowRight'
+                  ? active + 1
+                  : event.key === 'Home'
+                    ? 0
+                    : event.key === 'End'
+                      ? paths.length - 1
+                      : null;
+            if (index !== null) {
+              event.preventDefault();
+              select(index);
+            }
+          }}
+          onScroll={(event) => {
+            const track = event.currentTarget;
+            const index = Math.max(
+              0,
+              Math.min(paths.length - 1, Math.round(track.scrollLeft / track.clientWidth)),
+            );
+            if (index === active) return;
+            setActive(index);
+            const rail = thumbs.current;
+            const thumb = rail?.children[index] as HTMLElement | undefined;
+            if (rail && thumb)
+              rail.scrollTo({
+                left: thumb.offsetLeft - rail.clientWidth / 2 + thumb.clientWidth / 2,
+              });
+          }}
+        >
+          {paths.map((path, index) => (
+            <div
+              className="villa-slide"
+              key={path}
+              role="group"
+              aria-roledescription="slide"
+              aria-label={`${index + 1} dari ${paths.length}`}
+              aria-hidden={index !== active}
+            >
+              <img
+                src={mediaUrl(path)!}
+                alt={`${name}, foto ${index + 1}`}
+                loading={index === 0 ? 'eager' : 'lazy'}
+                draggable={false}
+              />
+            </div>
+          ))}
+        </div>
+        {paths.length > 1 && (
+          <>
+            <button
+              type="button"
+              className="villa-slider-arrow previous"
+              aria-label="Foto sebelumnya"
+              disabled={active === 0}
+              onClick={() => select(active - 1)}
+            >
+              <ChevronLeft size={22} />
+            </button>
+            <button
+              type="button"
+              className="villa-slider-arrow next"
+              aria-label="Foto berikutnya"
+              disabled={active === paths.length - 1}
+              onClick={() => select(active + 1)}
+            >
+              <ChevronRight size={22} />
+            </button>
+          </>
+        )}
+        <span className="villa-slider-count" role="status" aria-live="polite">
+          Foto {active + 1} dari {paths.length}
+        </span>
+      </div>
+      {paths.length > 1 && (
+        <>
+          <div ref={thumbs} className="gallery-thumbs" aria-label="Pilih foto villa">
+            {paths.map((path, index) => (
+              <button
+                type="button"
+                key={path}
+                aria-label={`Lihat foto ${index + 1}`}
+                aria-pressed={active === index}
+                onClick={() => select(index)}
+              >
+                <img src={mediaUrl(path)!} alt="" loading="lazy" draggable={false} />
+              </button>
+            ))}
+          </div>
+          <p className="text-sm muted">
+            Geser foto atau gunakan tombol panah untuk melihat galeri.
+          </p>
+        </>
+      )}
+    </section>
+  );
+}
 export function VillaCard({
   villa,
   images = [],
@@ -20,7 +145,13 @@ export function VillaCard({
 }) {
   const photos = images.filter((i) => i.villa_id === villa.id);
   const cover = villa.cover_path || photos[0]?.storage_path;
-  const [active, setActive] = useState<string>();
+  const gallery = [
+    ...new Set(
+      [cover, ...photos.map((photo) => photo.storage_path)].filter((path): path is string =>
+        Boolean(path),
+      ),
+    ),
+  ];
   return (
     <Card className={`villa-card gap-0 py-0 shadow-none ${selected ? 'selected' : ''}`}>
       <div className="villa-image">
@@ -51,11 +182,7 @@ export function VillaCard({
         </div>
         {villa.address && <p className="line-clamp-1 text-sm">{villa.address}</p>}
         <div className="row between pt-2">
-          <Dialog
-            onOpenChange={(open) => {
-              if (open) setActive(cover);
-            }}
-          >
+          <Dialog>
             <DialogTrigger asChild>
               <Button type="button" variant="outline" size="sm">
                 Lihat info
@@ -69,32 +196,7 @@ export function VillaCard({
                     {villa.description || 'Informasi penginapan untuk acara ini.'}
                   </DialogDescription>
                 </div>
-                {(active || cover) && (
-                  <img
-                    className="villa-detail-cover"
-                    src={mediaUrl(active || cover)!}
-                    alt={`Detail ${villa.name}`}
-                  />
-                )}
-                {photos.length > 1 && (
-                  <div className="gallery-thumbs">
-                    {photos.map((photo, i) => (
-                      <button
-                        type="button"
-                        key={photo.id}
-                        aria-label={`Lihat foto ${i + 1}`}
-                        aria-pressed={(active || cover) === photo.storage_path}
-                        onClick={() => setActive(photo.storage_path)}
-                      >
-                        <img
-                          src={mediaUrl(photo.storage_path)!}
-                          alt={`Foto ${i + 1}`}
-                          loading="lazy"
-                        />
-                      </button>
-                    ))}
-                  </div>
-                )}
+                {gallery.length > 0 && <VillaGallery paths={gallery} name={villa.name} />}
                 <dl className="villa-facts">
                   <div>
                     <dt>Harga per malam</dt>

@@ -224,6 +224,44 @@ test('real database: admin → participant → transport → private proof → v
     await expect(participant.getByAltText('Cover Villa E2E')).toHaveAttribute('src', starredSrc!);
     await participant.getByRole('button', { name: 'Lihat info' }).click();
     await expect(participant.getByRole('dialog')).toContainText('Villa E2E');
+
+    const slider = participant.locator('.villa-slider-track');
+    await expect(participant.getByText('Foto 1 dari 3', { exact: true })).toBeVisible();
+    await expect(slider.locator('img').first()).toHaveAttribute('src', starredSrc!);
+    await expect(
+      participant.getByRole('button', { name: 'Foto sebelumnya', exact: true }),
+    ).toBeDisabled();
+    await participant.getByRole('button', { name: 'Foto berikutnya', exact: true }).click();
+    await expect(participant.getByText('Foto 2 dari 3', { exact: true })).toBeVisible();
+    await participant.getByRole('button', { name: 'Lihat foto 3', exact: true }).click();
+    await expect(participant.getByText('Foto 3 dari 3', { exact: true })).toBeVisible();
+    await expect(
+      participant.getByRole('button', { name: 'Foto berikutnya', exact: true }),
+    ).toBeDisabled();
+    await slider.focus();
+    await participant.keyboard.press('Home');
+    await expect(participant.getByText('Foto 1 dari 3', { exact: true })).toBeVisible();
+    const photoBounds = await slider.boundingBox();
+    const swipe = await participantContext.newCDPSession(participant);
+    const swipeY = photoBounds!.y + photoBounds!.height * 0.35;
+    const swipeX = photoBounds!.x + photoBounds!.width * 0.85;
+    await swipe.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ x: swipeX, y: swipeY }],
+    });
+    for (let step = 1; step <= 10; step++) {
+      await swipe.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [{ x: swipeX - (photoBounds!.width * 0.7 * step) / 10, y: swipeY }],
+      });
+    }
+    await swipe.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await swipe.detach();
+    await expect(participant.getByText('Foto 1 dari 3', { exact: true })).toHaveCount(0);
+    await slider.focus();
+    await participant.keyboard.press('Home');
+    await expect(participant.getByText('Foto 1 dari 3', { exact: true })).toBeVisible();
+
     await expect(participant.getByRole('dialog')).toContainText('Area BBQ');
     await expect(participant.getByRole('dialog')).toContainText('Jl. Pengujian No. 10');
     await expect(participant.getByRole('link', { name: 'Buka Google Maps' })).toHaveAttribute(
