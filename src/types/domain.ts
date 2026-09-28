@@ -1,6 +1,12 @@
 export type Status =
   'DRAFT' | 'STAGE_1_OPEN' | 'STAGE_1_CLOSED' | 'STAGE_2_OPEN' | 'COMPLETED' | 'ARCHIVED';
+export interface PaymentMethod {
+  bank_name: string;
+  bank_account_number: string;
+  bank_account_holder: string;
+}
 export interface Event {
+  additional_payment_methods?: PaymentMethod[];
   id: string;
   owner_id: string;
   name: string;
@@ -56,7 +62,7 @@ export interface Participant {
   vehicle_owner: string | null;
   vehicle_driver: string | null;
   vehicle_capacity: number | null;
-  stage1_submitted_at: string;
+  stage1_submitted_at: string | null;
   stage2_submitted_at: string | null;
 }
 export interface Availability {
@@ -81,6 +87,7 @@ export interface Member {
   role: 'DRIVER' | 'PASSENGER';
 }
 export interface Payment {
+  payment_method?: string | null;
   id: string;
   participant_id: string;
   amount: number;

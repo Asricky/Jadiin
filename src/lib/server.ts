@@ -67,7 +67,7 @@ export async function bundle(event: Event, owner = false): Promise<Bundle> {
     'participant_id,villa_id',
     '*',
     'participant_id,transport_group_id,role',
-    owner ? 'id,participant_id,amount,status,admin_note,submitted_at' : 'id',
+    owner ? 'id,participant_id,amount,status,admin_note,submitted_at,payment_method' : 'id',
   ];
   // PostgREST defaults to 1,000 rows. Page child records so larger calendars do not
   // silently undercount availability (e.g. 30 participants x 60 selected dates).

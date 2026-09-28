@@ -34,7 +34,7 @@ export async function POST(req: Request, ctx: Ctx) {
         .maybeSingle();
       imagePath = image?.storage_path;
     }
-    if (body.action === 'rotate_token') {
+    if (body.action === 'rotate_token' || body.action === 'add_participant') {
       const token = newToken();
       data = { ...parsed, hash: hashToken(token) };
       access_url = `${appOrigin()}/e/${event.slug}/p/${token}`;

@@ -1,8 +1,11 @@
 'use client';
+import { LateParticipant } from './late-participant';
 import { Input } from './ui/input';
 import { useState } from 'react';
 import {
   DndContext,
+  DragOverlay,
+  rectIntersection,
   useDraggable,
   useDroppable,
   PointerSensor,
@@ -16,15 +19,17 @@ import type { Bundle } from '@/types/domain';
 import { Button } from './ui/button';
 type Act = (action: string, data: object) => Promise<unknown>;
 function Person({ id, name, disabled }: { id: string; name: string; disabled: boolean }) {
-  const { attributes, listeners, setNodeRef, transform } = useDraggable({ id, disabled });
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id, disabled });
   return (
     <div
       ref={setNodeRef}
       className="person-chip"
       style={{
-        transform: transform ? `translate(${transform.x}px,${transform.y}px)` : undefined,
-        zIndex: transform ? 10 : undefined,
+        opacity: isDragging ? 0.3 : 1,
+        touchAction: disabled ? undefined : 'none',
+        cursor: disabled ? 'default' : 'grab',
       }}
+      aria-label={`Geser ${name}`}
       {...listeners}
       {...attributes}
     >
@@ -36,12 +41,18 @@ function Person({ id, name, disabled }: { id: string; name: string; disabled: bo
 function Drop({ id, children }: { id: string; children: React.ReactNode }) {
   const { isOver, setNodeRef } = useDroppable({ id });
   return (
-    <section ref={setNodeRef} className={`card stack-sm group-drop ${isOver ? 'over' : ''}`}>
+    <section
+      data-drop-id={id}
+      ref={setNodeRef}
+      className={`card stack-sm group-drop ${isOver ? 'over' : ''}`}
+    >
       {children}
     </section>
   );
 }
 export function Transport({ data, act, locked }: { data: Bundle; act: Act; locked: boolean }) {
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const [type, setType] = useState('CAR');
   const [driver, setDriver] = useState('');
   const [owner, setOwner] = useState('');
@@ -56,11 +67,17 @@ export function Transport({ data, act, locked }: { data: Bundle; act: Act; locke
   );
   const driverIds = new Set(data.groups.map((g) => g.driver_participant_id));
   async function end(e: DragEndEvent) {
-    if (e.over)
+    setActiveId(null);
+    if (locked || busy || !e.over) return;
+    setBusy(true);
+    try {
       await act('assign', {
         participant_id: e.active.id,
         group_id: e.over.id === 'unassigned' ? '' : e.over.id,
       });
+    } finally {
+      setBusy(false);
+    }
   }
   return (
     <div className="stack">
@@ -68,8 +85,69 @@ export function Transport({ data, act, locked }: { data: Bundle; act: Act; locke
         <h2>Transport peserta</h2>
         <p>Geser nama ke kendaraan di desktop, atau gunakan pilihan transport di bawah.</p>
       </div>
+      <div className="grid grid-2">
+        {(['CAR', 'MOTORCYCLE'] as const).map((kind) => {
+          const offers = data.participants.filter((p) => p.vehicle_type === kind);
+          return (
+            <section className="card stack-sm" key={kind}>
+              <h3 className="row">
+                {kind === 'CAR' ? <Car size={20} /> : <Bike size={20} />}
+                {kind === 'CAR' ? 'Pemilik mobil' : 'Pemilik motor'}{' '}
+                <span className="pill">{offers.length}</span>
+              </h3>
+              {!offers.length && (
+                <p className="muted">Belum ada peserta yang menawarkan kendaraan ini.</p>
+              )}
+              {offers.map((p) => (
+                <div className="stack-sm border-t pt-3" key={p.id}>
+                  <strong>{p.vehicle_owner || p.name}</strong>
+                  <small>
+                    Ditawarkan oleh {p.name}
+                    {!p.stage1_submitted_at ? ' (peserta susulan)' : ''}
+                  </small>
+                  <p className="text-sm">
+                    Usulan driver: {p.vehicle_driver || p.name} /{' '}
+                    {p.vehicle_capacity || (kind === 'CAR' ? 5 : 2)} kursi termasuk driver
+                  </p>
+                  {data.groups.some((g) => g.owner_participant_id === p.id) ? (
+                    <span className="pill">Sudah masuk rencana transport</span>
+                  ) : (
+                    !locked && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setOwner(p.id);
+                          setType(kind);
+                          setLabel(
+                            `${kind === 'CAR' ? 'Mobil' : 'Motor'} ${p.vehicle_owner || p.name}`,
+                          );
+                          setCapacity(p.vehicle_capacity || (kind === 'CAR' ? 5 : 2));
+                          setDriver(
+                            unassigned.find(
+                              (x) =>
+                                x.name.toLowerCase() === (p.vehicle_driver || p.name).toLowerCase(),
+                            )?.id || '',
+                          );
+                          document
+                            .getElementById('vehicle-form')
+                            ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }}
+                      >
+                        Gunakan kendaraan
+                      </Button>
+                    )
+                  )}
+                </div>
+              ))}
+            </section>
+          );
+        })}
+      </div>
+      {!locked && <LateParticipant act={act} />}
       {!locked && (
         <form
+          id="vehicle-form"
           className="card stack-sm"
           onSubmit={async (e) => {
             e.preventDefault();
@@ -94,22 +172,6 @@ export function Transport({ data, act, locked }: { data: Bundle; act: Act; locke
           <p className="text-sm">
             Pilih pemilik untuk mengisi label, kapasitas, dan usulan driver dari jawaban peserta.
           </p>
-          {data.participants.some((p) => p.vehicle_type !== 'NONE') && (
-            <details>
-              <summary className="text-sm">Kendaraan yang ditawarkan peserta</summary>
-              <div className="stack-sm mt-3">
-                {data.participants
-                  .filter((p) => p.vehicle_type !== 'NONE')
-                  .map((p) => (
-                    <p key={p.id} className="text-sm">
-                      {p.vehicle_type === 'CAR' ? 'Mobil' : 'Motor'} {p.vehicle_owner || p.name} ·
-                      Driver: {p.vehicle_driver || p.name} ·{' '}
-                      {p.vehicle_capacity || (p.vehicle_type === 'CAR' ? 5 : 2)} kursi
-                    </p>
-                  ))}
-              </div>
-            </details>
-          )}
           <div className="grid grid-2">
             <label className="field">
               Jenis
@@ -211,7 +273,13 @@ export function Transport({ data, act, locked }: { data: Bundle; act: Act; locke
           <Button>Tambahkan kendaraan</Button>
         </form>
       )}
-      <DndContext sensors={sensors} onDragEnd={end}>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={rectIntersection}
+        onDragStart={(e) => setActiveId(String(e.active.id))}
+        onDragCancel={() => setActiveId(null)}
+        onDragEnd={end}
+      >
         <div className="grid grid-2">
           <Drop id="unassigned">
             <h3 className="row">
@@ -219,7 +287,7 @@ export function Transport({ data, act, locked }: { data: Bundle; act: Act; locke
               Belum ditempatkan ({unassigned.length})
             </h3>
             {unassigned.map((p) => (
-              <Person key={p.id} id={p.id} name={p.name} disabled={locked} />
+              <Person key={p.id} id={p.id} name={p.name} disabled={locked || busy} />
             ))}
             {!unassigned.length && <p>Semua sudah mendapat tempat ✓</p>}
           </Drop>
@@ -253,10 +321,24 @@ export function Transport({ data, act, locked }: { data: Bundle; act: Act; locke
                   </button>
                 )}
               </div>
+              <p className="text-sm">
+                Pemilik:{' '}
+                {data.participants.find((p) => p.id === g.owner_participant_id)?.vehicle_owner ||
+                  data.participants.find((p) => p.id === g.owner_participant_id)?.name ||
+                  'Belum ditentukan'}
+                <br />
+                Driver:{' '}
+                {data.participants.find((p) => p.id === g.driver_participant_id)?.name || 'Mandiri'}
+              </p>
               <small className="muted">
                 {data.members.filter((m) => m.transport_group_id === g.id).length} / {g.capacity}{' '}
-                kursi · {g.type}
+                kursi / {g.type === 'CAR' ? 'Mobil' : g.type === 'MOTORCYCLE' ? 'Motor' : 'Mandiri'}
               </small>
+              <p className="text-sm muted">
+                {data.members.filter((m) => m.transport_group_id === g.id).length >= g.capacity
+                  ? 'Kendaraan penuh'
+                  : 'Geser peserta ke area ini untuk menambahkan penumpang'}
+              </p>
               {data.members
                 .filter((m) => m.transport_group_id === g.id)
                 .map((m) => (
@@ -264,12 +346,20 @@ export function Transport({ data, act, locked }: { data: Bundle; act: Act; locke
                     key={m.participant_id}
                     id={m.participant_id}
                     name={`${data.participants.find((p) => p.id === m.participant_id)?.name}${m.role === 'DRIVER' ? ' · Driver' : ''}`}
-                    disabled={locked || m.role === 'DRIVER'}
+                    disabled={locked || busy || m.role === 'DRIVER'}
                   />
                 ))}
             </Drop>
           ))}
         </div>
+        <DragOverlay>
+          {activeId && (
+            <div className="person-chip shadow-xl bg-white">
+              <GripVertical size={14} />
+              {data.participants.find((p) => p.id === activeId)?.name}
+            </div>
+          )}
+        </DragOverlay>
       </DndContext>
       {!locked && (
         <section className="card stack-sm">
@@ -289,7 +379,15 @@ export function Transport({ data, act, locked }: { data: Bundle; act: Act; locke
                 >
                   <option value="">Belum ditempatkan</option>
                   {data.groups.map((g) => (
-                    <option key={g.id} value={g.id}>
+                    <option
+                      key={g.id}
+                      value={g.id}
+                      disabled={
+                        data.members.filter(
+                          (m) => m.transport_group_id === g.id && m.participant_id !== p.id,
+                        ).length >= g.capacity
+                      }
+                    >
                       {g.label}
                     </option>
                   ))}

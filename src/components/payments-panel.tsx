@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { PaymentMethodEditor } from './payment-method-editor';
 import { Wallet, ArrowDownLeft, Clock3, SlidersHorizontal, Search } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -131,6 +132,7 @@ export function PaymentsPanel({ data, act, locked }: { data: Bundle; act: Act; l
           </form>
         )}
       </section>
+      <PaymentMethodEditor event={data.event} act={act} locked={locked} />
       <div className="money-stats">
         {[
           [ArrowDownLeft, 'Sudah terverifikasi', summary.verified, 'received'],
@@ -195,6 +197,7 @@ export function PaymentsPanel({ data, act, locked }: { data: Bundle; act: Act; l
                 <div>
                   <strong>{participant.name}</strong>
                   <div className={`payment-status status-${status}`}>{labels[status]}</div>
+                  {payment?.payment_method && <small>Tujuan: {payment.payment_method}</small>}
                 </div>
               </div>
               <div className="payment-row-amount">

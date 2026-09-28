@@ -5,6 +5,8 @@ import { uploadSchema, detectImage } from '@/lib/validation';
 import { service } from '@/lib/supabase/server';
 import { errorResponse, ownedEvent, sameOrigin, rate, HttpError } from '@/lib/server';
 import { session } from '@/lib/session';
+import { paymentMethods, methodLabel } from '@/lib/payment-methods';
+import type { Event } from '@/types/domain';
 export async function POST(req: Request) {
   try {
     sameOrigin(req);
@@ -14,6 +16,7 @@ export async function POST(req: Request) {
     if (raw.action === 'sign') {
       const input = uploadSchema.parse(raw);
       let participantId: string | null = null;
+      let paymentMethod: string | null = null;
       if (input.kind === 'media') {
         const { event } = await ownedEvent(input.event_id);
         if (!['DRAFT', 'STAGE_1_OPEN', 'STAGE_1_CLOSED'].includes(event.status))
@@ -22,11 +25,7 @@ export async function POST(req: Request) {
         const p = await session(input.event_id);
         if (!p) throw new HttpError('Sesi tidak valid', 401);
         participantId = p.id;
-        const { data: e } = await db
-          .from('events')
-          .select('status,stage2_deadline,cost_per_person')
-          .eq('id', input.event_id)
-          .single();
+        const { data: e } = await db.from('events').select('*').eq('id', input.event_id).single();
         if (
           e?.status !== 'STAGE_2_OPEN' ||
           (e.stage2_deadline && new Date(e.stage2_deadline) < new Date())
@@ -34,6 +33,10 @@ export async function POST(req: Request) {
           throw new HttpError('Pembayaran ditutup');
         if (input.expected_amount === undefined || input.expected_amount !== e.cost_per_person)
           throw new HttpError('Nominal berubah. Muat ulang halaman untuk melihat tagihan terbaru.');
+        const methods = paymentMethods(e as Event).map(methodLabel);
+        paymentMethod = input.payment_method || methods[0];
+        if (!paymentMethod || !methods.includes(paymentMethod))
+          throw new HttpError('Rekening tidak tersedia. Muat ulang halaman.');
         const { data: pay } = await db
           .from('payments')
           .select('status')
@@ -54,6 +57,7 @@ export async function POST(req: Request) {
           size: input.size,
           kind: input.kind,
           amount: input.kind === 'payment' ? input.expected_amount : null,
+          payment_method: paymentMethod,
         })
         .select('id')
         .single();

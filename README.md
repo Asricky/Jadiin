@@ -42,6 +42,10 @@ flowchart LR
 
 **Tahap 2 — bereskan keberangkatan.** Peserta memilih kendaraan dengan kapasitas yang diperiksa database, melihat tagihan, lalu mengirim bukti pembayaran. Organizer melihat siapa ikut siapa dan siapa yang belum membayar.
 
+Di menu **Transport**, penawaran mobil dan motor dikelompokkan beserta pemilik, usulan driver, dan kapasitasnya. Organizer dapat menggeser peserta ke kendaraan atau memakai dropdown di ponsel. **Tambah peserta** menerima peserta susulan tanpa mengarang jawaban tahap 1; bagikan link akses pribadinya agar ia dapat memilih kursi dan membayar.
+
+Di menu **Pembayaran**, atur nominal dan rekening utama, lalu gunakan **Tambah metode pembayaran** untuk menyediakan rekening tambahan (maksimal 10 rekening). Peserta mentransfer penuh ke salah satu rekening dan memilih tujuan saat mengunggah bukti. Tujuan transfer disimpan bersama pembayaran, sehingga perubahan rekening tidak mengubah catatan bukti yang sudah masuk.
+
 ## Data setiap acara tetap terjaga
 
 - **Isolasi antar-organizer:** authorization server dan Supabase Row Level Security.

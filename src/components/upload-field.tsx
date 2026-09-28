@@ -19,6 +19,7 @@ export function UploadField({
   onDone,
   onUploaded,
   amount,
+  paymentMethod,
   disabled = false,
   showPreviews = true,
   onBusyChange,
@@ -26,6 +27,7 @@ export function UploadField({
   eventId: string;
   kind: 'media' | 'payment';
   amount?: number;
+  paymentMethod?: string;
   villaId?: string;
   disabled?: boolean;
   showPreviews?: boolean;
@@ -67,6 +69,7 @@ export function UploadField({
               size: file.size,
               mime: file.type,
               expected_amount: amount,
+              payment_method: paymentMethod,
             },
           );
           const { error } = await browserDb()

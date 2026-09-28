@@ -74,6 +74,18 @@ const date = z
   .regex(/^\d{4}-\d{2}-\d{2}$/)
   .refine((s) => !Number.isNaN(Date.parse(s)) && new Date(s).toISOString().slice(0, 10) === s);
 export const actions = {
+  add_participant: identity,
+  payment_methods: z.object({
+    methods: z
+      .array(
+        z.object({
+          bank_name: z.string().trim().min(1).max(100),
+          bank_account_number: z.string().regex(/^\d{5,30}$/),
+          bank_account_holder: z.string().trim().min(2).max(120),
+        }),
+      )
+      .max(9),
+  }),
   create: eventSchema,
   settings: eventSchema.extend({
     show_transport_groups: z.boolean(),
@@ -142,6 +154,7 @@ export const actions = {
 export const uploadSchema = z.object({
   kind: z.enum(['payment', 'media']),
   expected_amount: z.number().min(0).max(999999999).optional(),
+  payment_method: z.string().max(500).optional(),
   event_id: z.string().uuid(),
   mime: z.enum(['image/jpeg', 'image/png', 'image/webp']),
   size: z

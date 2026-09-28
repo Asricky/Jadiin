@@ -1,6 +1,5 @@
 ﻿import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
-import { randomBytes, createHmac } from 'node:crypto';
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -57,18 +56,17 @@ test('participants claim seats atomically, switch safely, and stale payment amou
     await act('status', { status: 'STAGE_1_OPEN' });
     const { data: dates } = await db.from('event_dates').select('id').eq('event_id', eid);
     const ids: string[] = [];
-    const tokens: string[] = [];
     for (const name of ['Raka', 'Nadia', 'Maura']) {
-      const token = randomBytes(32).toString('base64url');
-      tokens.push(token);
-      const hash = createHmac('sha256', process.env.PARTICIPANT_TOKEN_SECRET!)
-        .update(token)
-        .digest('hex');
-      const { data, error } = await db.rpc('submit_stage1', {
-        p_event: eid,
-        p_hash: hash,
-        p_existing_hash: null,
-        p_data: {
+      const context = await browser.newContext({
+        baseURL: origin,
+        viewport: { width: 390, height: 844 },
+        isMobile: true,
+        hasTouch: true,
+      });
+      contexts.push(context);
+      const submitted = await context.request.post(`/api/events/${slug}/stage-1`, {
+        headers: { Origin: origin },
+        data: {
           name,
           whatsapp: '6281234567890',
           vehicle_type: 'NONE',
@@ -76,18 +74,15 @@ test('participants claim seats atomically, switch safely, and stale payment amou
           dates: dates!.map((d) => d.id),
         },
       });
+      expect(submitted.ok()).toBe(true);
+      const { data: participant, error } = await db
+        .from('participants')
+        .select('id')
+        .eq('event_id', eid)
+        .eq('name', name)
+        .single();
       expect(error).toBeNull();
-      ids.push(data);
-      const context = await browser.newContext({
-        baseURL: origin,
-        viewport: { width: 390, height: 844 },
-        isMobile: true,
-        hasTouch: true,
-      });
-      await context.addCookies([
-        { name: `mp_${eid}`, value: token, url: origin, httpOnly: true, sameSite: 'Lax' },
-      ]);
-      contexts.push(context);
+      ids.push(participant!.id);
     }
     await act('status', { status: 'STAGE_1_CLOSED' });
     const group = await act('group', {
@@ -248,7 +243,120 @@ test('participants claim seats atomically, switch safely, and stale payment amou
     expect(commit.status()).toBe(400);
     expect((await commit.json()).error).toContain('Nominal berubah');
     expect((await db.from('payments').select('id').eq('event_id', eid)).data).toHaveLength(0);
+    // A late joiner gets a private session, no invented Stage 1 answers, and a real seat.
+    await page.getByRole('link', { name: 'Transport', exact: true }).click();
+    await page.getByRole('button', { name: 'Tambah peserta', exact: true }).click();
+    await page.getByLabel('Nama peserta susulan', { exact: true }).fill('Dimas Susulan');
+    await page.getByLabel('WhatsApp peserta susulan', { exact: true }).fill('081234567899');
+    const addedResponse = page.waitForResponse(
+      (r) => r.url().endsWith(`/api/admin/events/${eid}`) && r.request().method() === 'POST',
+    );
+    await page.getByRole('button', { name: 'Simpan peserta susulan' }).click();
+    const added = await (await addedResponse).json();
+    expect(added.access_url).toContain(`/e/${slug}/p/`);
+    await expect(page.getByRole('button', { name: 'Salin link peserta susulan' })).toBeVisible();
+    const late = (await db.from('participants').select('*').eq('id', added.id).single()).data!;
+    expect(late.stage1_submitted_at).toBeNull();
+    expect(
+      (await db.from('villa_votes').select('*').eq('participant_id', added.id)).data,
+    ).toHaveLength(0);
+    await act('assign', { participant_id: ids[loser], group_id: '' });
+    await page.reload();
+    const chip = page
+      .locator('[data-drop-id="unassigned"] .person-chip')
+      .filter({ hasText: 'Dimas Susulan' });
+    const target = page.locator(`[data-drop-id="${group}"]`);
+    await chip.scrollIntoViewIfNeeded();
+    const from = (await chip.boundingBox())!;
+    const to = (await target.boundingBox())!;
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(from.x + from.width / 2 + 12, from.y + from.height / 2, { steps: 4 });
+    await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 20 });
+    await page.mouse.up();
+    await expect(target).toContainText('Dimas Susulan');
+    await page.screenshot({ path: 'test-results/transport-late-participant.png', fullPage: true });
+    await page.getByRole('link', { name: 'Pembayaran', exact: true }).click();
+    await expect(page.locator('.payment-row')).toHaveCount(4);
+    await page.getByRole('button', { name: 'Tambah metode pembayaran' }).click();
+    await page.getByLabel('Bank tambahan', { exact: true }).fill('Mandiri');
+    await page.getByLabel('Nomor rekening tambahan', { exact: true }).fill('9876543210');
+    await page.getByLabel('Pemilik rekening tambahan', { exact: true }).fill('Panitia Jadiin');
+    await page.getByRole('button', { name: 'Simpan metode pembayaran' }).click();
+    await expect(page.getByText('9876543210 · a.n. Panitia Jadiin')).toBeVisible();
+    const lateContext = await browser.newContext({ baseURL: origin });
+    contexts.push(lateContext);
+    const latePage = await lateContext.newPage();
+    await latePage.goto(added.access_url);
+    await latePage.getByRole('button', { name: 'Buka jawaban saya' }).click();
+    await expect(latePage).toHaveURL(/stage-2$/);
+    await latePage.goto(`/e/${slug}/stage-2`);
+    await latePage.getByLabel('Tujuan transfer', { exact: true }).selectOption('1');
+    await expect(latePage.getByRole('heading', { name: '9876543210' })).toBeVisible();
+    const selectedMethod = 'Mandiri · 9876543210 · Panitia Jadiin';
+    const signLate = await lateContext.request.post('/api/uploads', {
+      headers: { Origin: origin },
+      data: {
+        action: 'sign',
+        kind: 'payment',
+        event_id: eid,
+        mime: 'image/png',
+        size: png.length,
+        expected_amount: 250000,
+        payment_method: selectedMethod,
+      },
+    });
+    expect(signLate.ok()).toBe(true);
+    const lateIntent = await signLate.json();
+    expect(
+      (
+        await anonymous.storage
+          .from(lateIntent.bucket)
+          .uploadToSignedUrl(lateIntent.path, lateIntent.token, png, { contentType: 'image/png' })
+      ).error,
+    ).toBeNull();
+    await act('payment_methods', { methods: [] });
+    const staleMethod = await lateContext.request.post('/api/uploads', {
+      headers: { Origin: origin },
+      data: { action: 'complete', intent: lateIntent.intent },
+    });
+    expect(staleMethod.status()).toBe(400);
+    expect((await staleMethod.json()).error).toContain('Rekening berubah');
+    await act('payment_methods', {
+      methods: [
+        {
+          bank_name: 'Mandiri',
+          bank_account_number: '9876543210',
+          bank_account_holder: 'Panitia Jadiin',
+        },
+      ],
+    });
+    await latePage.getByLabel('Bukti pembayaran', { exact: true }).setInputFiles({ name: 'transfer-mandiri.png', mimeType: 'image/png', buffer: png });
+    await expect(latePage).toHaveURL(/thank-you$/);
+    await act('payment_methods', { methods: [] });
+    expect(
+      (await db.from('payments').select('payment_method').eq('participant_id', added.id).single())
+        .data?.payment_method,
+    ).toBe(selectedMethod);
+    expect(
+      (
+        await anonymous.rpc('admin_action', {
+          p_event: eid,
+          p_action: 'add_participant',
+          p_data: { name: 'Intruder' },
+        })
+      ).error,
+    ).toBeTruthy();
     await act('status', { status: 'COMPLETED' });
+    expect(
+      (
+        await owner.rpc('admin_action', {
+          p_event: eid,
+          p_action: 'payment_methods',
+          p_data: { methods: [] },
+        })
+      ).error,
+    ).toBeTruthy();
     expect((await request(loser, { group_id: null })).ok()).toBe(false);
   } finally {
     for (const c of contexts) await c.close();
