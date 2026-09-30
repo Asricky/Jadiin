@@ -85,7 +85,10 @@ test('participants claim seats atomically, switch safely, and stale payment amou
         data: {
           name,
           whatsapp: '6281234567890',
-          vehicle_type: 'NONE',
+          vehicle_type: name === 'Nadia' ? 'NONE' : 'CAR',
+          vehicle_owner: name === 'Maura' ? 'NABIL' : name,
+          vehicle_driver: name === 'Maura' ? 'Nabil' : name,
+          vehicle_capacity: 2,
           villa_id: villa,
           dates: dates!.map((d) => d.id),
         },
@@ -101,13 +104,6 @@ test('participants claim seats atomically, switch safely, and stale payment amou
       ids.push(participant!.id);
     }
     await act('status', { status: 'STAGE_1_CLOSED' });
-    const group = await act('group', {
-      type: 'CAR',
-      label: 'Mobil Raka',
-      capacity: 2,
-      owner_participant_id: ids[0],
-      driver_participant_id: ids[0],
-    });
     await act('finalize', { final_date: '2027-01-01', final_villa_id: villa });
     await act('billing', {
       cost_per_person: 200000,
@@ -119,8 +115,14 @@ test('participants claim seats atomically, switch safely, and stale payment amou
     });
     // Publishing no longer requires admins to assign every passenger.
     await act('status', { status: 'STAGE_2_OPEN' });
+    const activated = (await db.from('transport_groups').select('*').eq('event_id', eid)).data!;
+    expect(activated).toHaveLength(1);
+    const group = activated[0].id;
+    expect(activated[0].owner_participant_id).toBe(ids[0]);
     const p1 = await contexts[1].newPage();
     await p1.goto(`/e/${slug}/stage-2`);
+    await expect(p1.locator(`[data-pending-offer="${ids[2]}"]`)).toContainText('NABIL');
+    await expect(p1.locator(`[data-pending-offer="${ids[2]}"]`)).toContainText('belum aktif');
     await expect(p1.locator('.villa-card')).toHaveCount(0);
     await expect(p1.getByRole('region', { name: 'Preview pilihan villa' })).toHaveCount(0);
     await expect(p1.locator('.final-trip-line')).toContainText('Rumah Kebun');
@@ -132,27 +134,32 @@ test('participants claim seats atomically, switch safely, and stale payment amou
     ).toHaveLength(1);
     await expect(p1.getByRole('button', { name: 'Ikut Mobil Raka' })).toBeVisible();
     // Actual touch drag, using the handle instead of locking the whole page scroll.
-    await p1.locator('#transport').evaluate((el) => el.scrollIntoView({ block: 'start' }));
-    const handle = await p1
-      .getByRole('button', { name: 'Geser transport untuk Nadia' })
-      .boundingBox();
-    const carBounds = await p1.locator(`[data-transport-drop="${group}"]`).boundingBox();
+    const grip = p1.getByRole('button', { name: 'Geser transport untuk Nadia' });
+    await grip.scrollIntoViewIfNeeded();
+    const handle = (await grip.boundingBox())!;
     const touch = await contexts[1].newCDPSession(p1);
     await touch.send('Input.dispatchTouchEvent', {
       type: 'touchStart',
-      touchPoints: [{ x: handle!.x + 20, y: handle!.y + 20 }],
+      touchPoints: [{ x: handle.x + 20, y: handle.y + 20 }],
     });
     await p1.waitForTimeout(250); // TouchSensor activation threshold.
-    for (let i = 1; i <= 10; i++)
-      await touch.send('Input.dispatchTouchEvent', {
-        type: 'touchMove',
-        touchPoints: [
-          {
-            x: handle!.x + 20 + ((carBounds!.x + carBounds!.width / 2 - handle!.x - 20) * i) / 10,
-            y: handle!.y + 20 + ((carBounds!.y + carBounds!.height / 2 - handle!.y - 20) * i) / 10,
-          },
-        ],
-      });
+    await touch.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x: handle.x + 20, y: 45 }],
+    });
+    await expect
+      .poll(async () => {
+        const bounds = (await p1.locator(`[data-transport-drop="${group}"]`).boundingBox())!;
+        return bounds.y >= 45 && bounds.y + bounds.height / 2 < 780;
+      })
+      .toBe(true);
+    const carBounds = (await p1.locator(`[data-transport-drop="${group}"]`).boundingBox())!;
+    await touch.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [
+        { x: carBounds.x + carBounds.width / 2, y: carBounds.y + carBounds.height / 2 },
+      ],
+    });
     await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     await touch.detach();
     await expect(p1.getByRole('button', { name: 'Kendaraanmu', exact: true })).toBeVisible();
@@ -424,7 +431,7 @@ test('participants claim seats atomically, switch safely, and stale payment amou
       const driver = await act('add_participant', {
         name: `Driver ${type} tambahan`,
         whatsapp: '6281234567888',
-        vehicle_type: type,
+        vehicle_type: 'NONE',
         hash: randomBytes(32).toString('hex'),
       });
       const extraGroup = await act('group', {
@@ -522,6 +529,49 @@ test('participants claim seats atomically, switch safely, and stale payment amou
         })
       ).error,
     ).toBeTruthy();
+    const motorOwner = await act('add_participant', {
+      name: 'Penyedia Motor',
+      whatsapp: '6281234567888',
+      vehicle_type: 'MOTORCYCLE',
+      hash: randomBytes(32).toString('hex'),
+    });
+    const motorOffer = (
+      await db
+        .from('transport_groups')
+        .select('*')
+        .eq('event_id', eid)
+        .eq('owner_participant_id', motorOwner)
+        .single()
+    ).data!;
+    expect(motorOffer.type).toBe('MOTORCYCLE');
+    expect(
+      (await db.from('transport_members').select('*').eq('transport_group_id', motorOffer.id)).data,
+    ).toHaveLength(1);
+    await latePage.goto(`/e/${slug}/stage-2`);
+    await expect(
+      latePage.getByRole('heading', { name: 'Motor Penyedia Motor', exact: true }),
+    ).toBeVisible();
+    await page.goto(`/admin/events/${eid}/transport`);
+    await expect(
+      page.getByText('Aktif di form peserta: Motor Penyedia Motor', { exact: true }),
+    ).toBeVisible();
+    const refreshedRoster = await (
+      await contexts[1].request.get(`/api/events/${slug}/transport`)
+    ).json();
+    expect(
+      refreshedRoster.offers.every(
+        (p: Record<string, unknown>) => !('whatsapp' in p) && !('access_token_hash' in p),
+      ),
+    ).toBe(true);
+    await act('delete_group', { id: motorOffer.id });
+    await act('status', { status: 'STAGE_1_CLOSED' });
+    await act('status', { status: 'STAGE_2_OPEN' });
+    expect(
+      (await db.from('transport_groups').select('id').eq('owner_participant_id', motorOwner)).data,
+    ).toHaveLength(0);
+    expect(
+      (await db.from('transport_groups').select('id').eq('owner_participant_id', ids[0])).data,
+    ).toHaveLength(1);
     await act('status', { status: 'COMPLETED' });
     expect(
       (await owner.rpc('recommend_villa', { p_event: eid, p_villa: null })).error,

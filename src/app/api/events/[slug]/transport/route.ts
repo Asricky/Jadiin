@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { publicEvent, bundle, errorResponse, sameOrigin, rate, HttpError } from '@/lib/server';
 import { session } from '@/lib/session';
 import { service } from '@/lib/supabase/server';
+import { transportOffers } from '@/lib/transport-offers-server';
 type Context = { params: Promise<{ slug: string }> };
 async function actor(ctx: Context) {
   const event = await publicEvent((await ctx.params).slug);
@@ -15,13 +16,14 @@ async function actor(ctx: Context) {
 export async function GET(_: Request, ctx: Context) {
   try {
     const { event, participant } = await actor(ctx);
-    const data = await bundle(event);
+    const [data, offers] = await Promise.all([bundle(event), transportOffers(event.id)]);
     return NextResponse.json(
       {
         groups: data.groups.filter(
           (g) =>
             g.type !== 'INDEPENDENT' || data.members.some((m) => m.transport_group_id === g.id),
         ),
+        offers,
         members: data.members,
         participants: data.participants,
         participantId: participant.id,

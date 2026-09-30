@@ -1,4 +1,5 @@
 import { paymentMethods } from '@/lib/payment-methods';
+import { transportOffers } from '@/lib/transport-offers-server';
 import { TransportPicker } from '@/components/transport-picker';
 import { appOrigin } from '@/lib/app-origin';
 import Link from 'next/link';
@@ -15,7 +16,7 @@ export default async function Stage2({ params }: { params: Promise<{ slug: strin
   const p = await session(event.id);
   if (!p) redirect(`/e/${slug}`);
   if (!['STAGE_2_OPEN', 'COMPLETED'].includes(event.status)) redirect(`/e/${slug}/dashboard`);
-  const [data, { data: payment }] = await Promise.all([
+  const [data, { data: payment }, offers] = await Promise.all([
     bundle(event),
     service()
       .from('payments')
@@ -23,6 +24,7 @@ export default async function Stage2({ params }: { params: Promise<{ slug: strin
       .eq('participant_id', p.id)
       .eq('event_id', event.id)
       .maybeSingle(),
+    transportOffers(event.id),
   ]);
   const villa = data.villas.find((v) => v.id === event.final_villa_id);
   const amount = payment && payment.status !== 'REJECTED' ? payment.amount : event.cost_per_person!;
@@ -38,6 +40,7 @@ export default async function Stage2({ params }: { params: Promise<{ slug: strin
       <TransportPicker
         slug={slug}
         initial={{
+          offers,
           groups: data.groups,
           members: data.members,
           participants: data.participants.map((p) => ({ id: p.id, name: p.name })),

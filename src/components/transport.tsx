@@ -17,6 +17,7 @@ import {
 import { Car, Bike, Footprints, GripVertical, Trash2 } from 'lucide-react';
 import type { Bundle } from '@/types/domain';
 import { Button } from './ui/button';
+import { offerStatus } from '@/lib/vehicle-offers';
 type Act = (action: string, data: object) => Promise<unknown>;
 function Person({ id, name, disabled }: { id: string; name: string; disabled: boolean }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id, disabled });
@@ -88,6 +89,11 @@ export function Transport({ data, act, locked }: { data: Bundle; act: Act; locke
       <div>
         <h2>Transport peserta</h2>
         <p>Geser nama ke kendaraan di desktop, atau gunakan pilihan transport di bawah.</p>
+        <p className="text-sm">
+          Penawaran dengan pemilik dan driver yang sama dengan penawar otomatis aktif saat Stage 2
+          dibuka. Nama yang berbeda perlu dikonfirmasi di bawah; jangan buat kendaraan baru untuk
+          penawaran yang merujuk kendaraan yang sama.
+        </p>
       </div>
       <div className="grid grid-2">
         {(['CAR', 'MOTORCYCLE'] as const).map((kind) => {
@@ -96,7 +102,7 @@ export function Transport({ data, act, locked }: { data: Bundle; act: Act; locke
             <section className="card stack-sm" key={kind}>
               <h3 className="row">
                 {kind === 'CAR' ? <Car size={20} /> : <Bike size={20} />}
-                {kind === 'CAR' ? 'Pemilik mobil' : 'Pemilik motor'}{' '}
+                {kind === 'CAR' ? 'Penawaran mobil' : 'Penawaran motor'}{' '}
                 <span className="pill">{offers.length}</span>
               </h3>
               {!offers.length && (
@@ -113,15 +119,25 @@ export function Transport({ data, act, locked }: { data: Bundle; act: Act; locke
                     Usulan driver: {p.vehicle_driver || p.name} /{' '}
                     {p.vehicle_capacity || (kind === 'CAR' ? 5 : 2)} kursi termasuk driver
                   </p>
-                  {data.groups.some((g) => g.owner_participant_id === p.id) ? (
-                    <span className="pill">Sudah masuk rencana transport</span>
+                  <p className="text-sm">
+                    {offerStatus(p, data.groups, data.members, data.participants).message}
+                  </p>
+                  {offerStatus(p, data.groups, data.members, data.participants).group ? (
+                    <span className="pill">Tersedia di form peserta</span>
                   ) : (
                     !locked && (
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => {
-                          setOwner(p.id);
+                          const normalized = (value: string) =>
+                            value.trim().toLowerCase().replace(/\s+/g, ' ');
+                          setOwner(
+                            data.participants.find(
+                              (person) =>
+                                normalized(person.name) === normalized(p.vehicle_owner || p.name),
+                            )?.id || '',
+                          );
                           setType(kind);
                           setLabel(
                             `${kind === 'CAR' ? 'Mobil' : 'Motor'} ${p.vehicle_owner || p.name}`,
@@ -138,7 +154,7 @@ export function Transport({ data, act, locked }: { data: Bundle; act: Act; locke
                             ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
                         }}
                       >
-                        Gunakan kendaraan
+                        Atur pemilik & driver
                       </Button>
                     )
                   )}

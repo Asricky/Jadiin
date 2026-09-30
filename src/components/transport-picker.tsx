@@ -18,9 +18,11 @@ import { Button } from './ui/button';
 import { Notice } from './common';
 import { api } from '@/lib/utils';
 import type { Group, Member } from '@/types/domain';
+import { offerStatus, type VehicleOffer } from '@/lib/vehicle-offers';
 
 type Person = { id: string; name: string };
 type State = {
+  offers: VehicleOffer[];
   groups: Group[];
   members: Member[];
   participants: Person[];
@@ -135,6 +137,9 @@ export function TransportPicker({ slug, initial }: { slug: string; initial: Stat
   }, [refresh]);
   const mine = data.members.find((m) => m.participant_id === data.participantId);
   const shared = data.groups.filter((g) => g.type !== 'INDEPENDENT');
+  const pendingOffers = data.offers.filter(
+    (p) => !offerStatus(p, data.groups, data.members, data.participants).group,
+  );
   const reserved = new Set(
     shared.flatMap((g) => [g.owner_participant_id, g.driver_participant_id]).filter(Boolean),
   );
@@ -320,11 +325,33 @@ export function TransportPicker({ slug, initial }: { slug: string; initial: Stat
                     </DropArea>
                   );
                 })}
-              {!shared.some((g) => g.type === type) && (
-                <p className="transport-empty">
-                  Belum ada {type === 'CAR' ? 'mobil' : 'motor'} yang disediakan.
-                </p>
-              )}
+              {pendingOffers
+                .filter((p) => p.vehicle_type === type)
+                .map((p) => (
+                  <article className="transport-drop" key={p.id} data-pending-offer={p.id}>
+                    <span className="pill">Penawaran · belum aktif</span>
+                    <h4>
+                      {type === 'CAR' ? 'Mobil' : 'Motor'} {p.vehicle_owner || p.name}
+                    </h4>
+                    <p className="text-sm">
+                      Ditawarkan oleh {p.name}
+                      <br />
+                      Usulan driver: {p.vehicle_driver || p.name}
+                      <br />
+                      Kapasitas penawaran: {p.vehicle_capacity || (type === 'CAR' ? 5 : 2)} orang
+                    </p>
+                    <p className="text-sm muted">
+                      {offerStatus(p, data.groups, data.members, data.participants).message} Kursi
+                      belum dapat dipilih.
+                    </p>
+                  </article>
+                ))}
+              {!shared.some((g) => g.type === type) &&
+                !pendingOffers.some((p) => p.vehicle_type === type) && (
+                  <p className="transport-empty">
+                    Belum ada {type === 'CAR' ? 'mobil' : 'motor'} yang disediakan.
+                  </p>
+                )}
             </section>
           ))}
         </div>

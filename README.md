@@ -50,6 +50,8 @@ Migrasi `202609300008_transport_owner_seats.sql` mempertahankan tabel transport 
 
 Di menu **Transport**, penawaran mobil dan motor dikelompokkan beserta pemilik, usulan driver, dan kapasitasnya. Organizer dapat menggeser peserta ke kendaraan atau memakai dropdown di ponsel. **Tambah peserta** menerima peserta susulan tanpa mengarang jawaban tahap 1; bagikan link akses pribadinya agar ia dapat memilih kursi dan membayar.
 
+Saat Stage 2 dibuka, penawaran yang menyebut penawar sendiri sebagai pemilik dan driver otomatis menjadi kendaraan aktif, dengan satu kursi driver. Penawaran yang menyebut nama lain tetap terlihat di admin dan peserta sebagai **belum aktif**; gunakan **Atur pemilik & driver** untuk mengonfirmasi identitas sebelum menambah kendaraan. Beberapa penawaran dengan nama pemilik yang sama tidak otomatis dianggap kendaraan berbeda. Kendaraan yang dihapus admin tidak dibuat ulang, dan peserta yang sudah memilih kendaraan/mandiri tidak dipindahkan otomatis. Migrasi `202609300009_activate_vehicle_offers.sql` menerapkan aktivasi aman ini pada event Stage 2 existing, memakai grup/anggota transport yang sama serta timestamp aktivasi pada peserta untuk mencegah pembuatan ulang.
+
 Di menu **Pembayaran**, atur nominal dan rekening utama, lalu gunakan **Tambah metode pembayaran** untuk menyediakan rekening tambahan (maksimal 10 rekening). Peserta mentransfer penuh ke salah satu rekening dan memilih tujuan saat mengunggah bukti. Tujuan transfer disimpan bersama pembayaran, sehingga perubahan rekening tidak mengubah catatan bukti yang sudah masuk.
 
 ## Data setiap acara tetap terjaga
