@@ -6,6 +6,7 @@ export interface PaymentMethod {
   bank_account_holder: string;
 }
 export interface Event {
+  recommended_villa_id?: string | null;
   additional_payment_methods?: PaymentMethod[];
   id: string;
   owner_id: string;

@@ -137,11 +137,15 @@ export function VillaCard({
   images = [],
   selected,
   onSelect,
+  recommended = false,
+  final = false,
 }: {
   villa: Villa;
   images?: VillaImage[];
   selected?: boolean;
   onSelect?: () => void;
+  recommended?: boolean;
+  final?: boolean;
 }) {
   const photos = images.filter((i) => i.villa_id === villa.id);
   const cover = villa.cover_path || photos[0]?.storage_path;
@@ -171,6 +175,12 @@ export function VillaCard({
         )}
       </div>
       <div className="villa-body stack-sm">
+        {(recommended || final) && (
+          <div className="row flex-wrap">
+            {recommended && <span className="pill">Rekomendasi utama admin</span>}
+            {final && <span className="pill">Villa final</span>}
+          </div>
+        )}
         <h3>{villa.name}</h3>
         <div className="villa-price">
           <strong>{rupiah(villa.price)}</strong>
@@ -181,6 +191,12 @@ export function VillaCard({
           {villa.capacity} orang
         </div>
         {villa.address && <p className="line-clamp-1 text-sm">{villa.address}</p>}
+        {villa.facilities.length > 0 && (
+          <p className="text-sm muted line-clamp-2">
+            {villa.facilities.slice(0, 3).join(' · ')}
+            {villa.facilities.length > 3 ? ` · +${villa.facilities.length - 3} fasilitas` : ''}
+          </p>
+        )}
         <div className="row between pt-2">
           <Dialog>
             <DialogTrigger asChild>

@@ -54,6 +54,21 @@ test('participants claim seats atomically, switch safely, and stale payment amou
       sort_order: 0,
     });
     await act('status', { status: 'STAGE_1_OPEN' });
+    const recommendation = await act('villa', {
+      name: 'Villa Pemandangan',
+      description: 'Pilihan rekomendasi organizer.',
+      price: 1500000,
+      capacity: 12,
+      address: 'Lembang',
+      google_maps_url: '',
+      facilities: ['Teras', 'Dapur'],
+      notes: '',
+      active: true,
+      sort_order: 9,
+    });
+    expect(
+      (await owner.rpc('recommend_villa', { p_event: eid, p_villa: recommendation })).error,
+    ).toBeNull();
     const { data: dates } = await db.from('event_dates').select('id').eq('event_id', eid);
     const ids: string[] = [];
     for (const name of ['Raka', 'Nadia', 'Maura']) {
@@ -105,6 +120,12 @@ test('participants claim seats atomically, switch safely, and stale payment amou
     await act('status', { status: 'STAGE_2_OPEN' });
     const p1 = await contexts[1].newPage();
     await p1.goto(`/e/${slug}/stage-2`);
+    const previews = p1.getByRole('region', { name: 'Preview pilihan villa' });
+    await expect(previews.locator('.villa-card').first()).toContainText('Villa Pemandangan');
+    await expect(previews.locator('.villa-card').first()).toContainText('Rekomendasi utama admin');
+    await expect(previews.locator('.villa-card').filter({ hasText: 'Rumah Kebun' })).toContainText(
+      'Villa final',
+    );
     await expect(p1.getByRole('button', { name: 'Ikut Mobil Raka' })).toBeVisible();
     await p1.getByRole('button', { name: 'Ikut Mobil Raka' }).click();
     await expect(p1.getByRole('button', { name: 'Kendaraanmu', exact: true })).toBeVisible();
@@ -176,6 +197,12 @@ test('participants claim seats atomically, switch safely, and stale payment amou
     ).toBe(401);
     const anonymous = createClient(url, anon, { auth: { persistSession: false } });
     expect(
+      (await anonymous.rpc('recommend_villa', { p_event: eid, p_villa: recommendation })).error,
+    ).toBeTruthy();
+    expect(
+      (await owner.rpc('recommend_villa', { p_event: other, p_villa: recommendation })).error,
+    ).toBeTruthy();
+    expect(
       (await anonymous.rpc('choose_transport', { p_event: eid, p_hash: 'invalid', p_group: group }))
         .error,
     ).toBeTruthy();
@@ -191,6 +218,15 @@ test('participants claim seats atomically, switch safely, and stale payment amou
     await page.getByLabel('Password', { exact: true }).fill(password);
     await page.getByRole('button', { name: 'Masuk', exact: true }).click();
     await expect(page).toHaveURL(/admin\/events$/);
+    await page.goto(`/admin/events/${eid}/villas`);
+    await page.getByRole('button', { name: 'Jadikan rekomendasi utama', exact: true }).click();
+    await expect(page.locator('.villa-card').first()).toContainText('Rumah Kebun');
+    await p1.reload();
+    await expect(previews.locator('.villa-card').first()).toContainText('Rumah Kebun');
+    expect(
+      (await db.from('events').select('final_villa_id').eq('id', eid).single()).data
+        ?.final_villa_id,
+    ).toBe(villa);
     await page.goto(`/admin/events/${eid}`);
     await expect(page.getByRole('heading', { name: 'Teman seperjalanan' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Ketersediaan peserta' })).toHaveCount(0);
@@ -287,9 +323,29 @@ test('participants claim seats atomically, switch safely, and stale payment amou
     const lateContext = await browser.newContext({ baseURL: origin });
     contexts.push(lateContext);
     const latePage = await lateContext.newPage();
+    const motorcycle = await act('group', {
+      type: 'MOTORCYCLE',
+      label: 'Motor teman',
+      capacity: 2,
+      owner_participant_id: ids[loser],
+      driver_participant_id: ids[loser],
+    });
     await latePage.goto(added.access_url);
     await latePage.getByRole('button', { name: 'Buka jawaban saya' }).click();
     await expect(latePage).toHaveURL(/stage-2$/);
+    await latePage.getByRole('button', { name: 'Motor (1)', exact: true }).click();
+    await expect(latePage.getByRole('button', { name: 'Ikut Mobil Raka' })).toHaveCount(0);
+    await latePage.getByRole('button', { name: 'Ikut Motor teman' }).click();
+    await expect(latePage.getByRole('button', { name: 'Kendaraanmu', exact: true })).toBeVisible();
+    expect(
+      (
+        await db
+          .from('transport_members')
+          .select('transport_group_id')
+          .eq('participant_id', added.id)
+          .single()
+      ).data?.transport_group_id,
+    ).toBe(motorcycle);
     await latePage.goto(`/e/${slug}/stage-2`);
     await latePage.getByLabel('Tujuan transfer', { exact: true }).selectOption('1');
     await expect(latePage.getByRole('heading', { name: '9876543210' })).toBeVisible();
@@ -331,7 +387,9 @@ test('participants claim seats atomically, switch safely, and stale payment amou
         },
       ],
     });
-    await latePage.getByLabel('Bukti pembayaran', { exact: true }).setInputFiles({ name: 'transfer-mandiri.png', mimeType: 'image/png', buffer: png });
+    await latePage
+      .getByLabel('Bukti pembayaran', { exact: true })
+      .setInputFiles({ name: 'transfer-mandiri.png', mimeType: 'image/png', buffer: png });
     await expect(latePage).toHaveURL(/thank-you$/);
     await act('payment_methods', { methods: [] });
     expect(
@@ -348,6 +406,9 @@ test('participants claim seats atomically, switch safely, and stale payment amou
       ).error,
     ).toBeTruthy();
     await act('status', { status: 'COMPLETED' });
+    expect(
+      (await owner.rpc('recommend_villa', { p_event: eid, p_villa: null })).error,
+    ).toBeTruthy();
     expect(
       (
         await owner.rpc('admin_action', {

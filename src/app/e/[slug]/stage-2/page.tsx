@@ -8,7 +8,7 @@ import { session } from '@/lib/session';
 import { service } from '@/lib/supabase/server';
 import { prettyDate, rupiah } from '@/lib/utils';
 import { CopyButton } from '@/components/common';
-import { VillaCard } from '@/components/villa-card';
+import { VillaRecommendations } from '@/components/villa-recommendations';
 import { PaymentUpload } from '@/components/payment-upload';
 export default async function Stage2({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -38,7 +38,12 @@ export default async function Stage2({ params }: { params: Promise<{ slug: strin
           {prettyDate(event.final_date!)} - {prettyDate(event.final_end_date!)}
         </h2>
       </section>
-      {villa && <VillaCard villa={villa} images={data.images} />}
+      {villa && (
+        <div className="notice">
+          <strong>Villa final: {villa.name}</strong>
+          <p>Ini lokasi acara yang sudah ditetapkan organizer.</p>
+        </div>
+      )}
       <TransportPicker
         slug={slug}
         initial={{
@@ -49,6 +54,7 @@ export default async function Stage2({ params }: { params: Promise<{ slug: strin
           open: event.status === 'STAGE_2_OPEN',
         }}
       />
+      <VillaRecommendations data={data} />
       <section className="card stack">
         <span className="eyebrow">02 / PEMBAYARAN</span>
         <h2>

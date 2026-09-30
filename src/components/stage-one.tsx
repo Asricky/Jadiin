@@ -13,6 +13,7 @@ import { Button } from './ui/button';
 import { Notice } from './common';
 import { DateGrid } from './date-grid';
 import { VillaCard } from './villa-card';
+import { orderedVillas } from '@/lib/villa-recommendations';
 import type { Event, EventDate, Villa, VillaImage } from '@/types/domain';
 type Values = z.input<typeof stage1Schema>;
 export function StageOne({
@@ -22,7 +23,7 @@ export function StageOne({
   images,
   initial,
 }: {
-  event: Pick<Event, 'id' | 'slug'>;
+  event: Pick<Event, 'id' | 'slug' | 'recommended_villa_id'>;
   dates: EventDate[];
   villas: Villa[];
   images: VillaImage[];
@@ -160,13 +161,14 @@ export function StageOne({
       {step === 2 && (
         <>
           <div className="grid grid-2">
-            {villas
+            {orderedVillas(villas, event.recommended_villa_id)
               .filter((v) => v.active)
               .map((v) => (
                 <VillaCard
                   key={v.id}
                   villa={v}
                   images={images}
+                  recommended={v.id === event.recommended_villa_id}
                   selected={values.villa_id === v.id}
                   onSelect={() => setValue('villa_id', v.id)}
                 />

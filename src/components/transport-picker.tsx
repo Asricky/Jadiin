@@ -17,6 +17,7 @@ export function TransportPicker({ slug, initial }: { slug: string; initial: Stat
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [filter, setFilter] = useState('ALL');
   const refresh = useCallback(async () => {
     const r = await fetch(`/api/events/${slug}/transport`, { cache: 'no-store' });
     if (!r.ok)
@@ -77,7 +78,45 @@ export function TransportPicker({ slug, initial }: { slug: string; initial: Stat
           <RefreshCw size={17} />
         </Button>
       </div>
-      <p>Kursi langsung terisi saat dipilih. Kamu bisa pindah selama Stage 2 masih dibuka.</p>
+      <p>
+        Tidak membawa kendaraan? Pilih mobil atau motor yang tersedia, lalu tekan “Ikut”. Namamu
+        langsung masuk ke daftar penumpang tanpa perlu mendaftarkan kendaraan sendiri.
+      </p>
+      <div className="notice" role="status">
+        {mine ? (
+          <>
+            Transport {data.participants.find((p) => p.id === data.participantId)?.name}:{' '}
+            <strong>{data.groups.find((g) => g.id === mine.transport_group_id)?.label}</strong>
+          </>
+        ) : (
+          'Kamu belum memilih transport. Pilih kursi di bawah sebelum berangkat.'
+        )}
+      </div>
+      <div className="row flex-wrap" role="group" aria-label="Jenis kendaraan">
+        {(
+          [
+            ['ALL', 'Semua kendaraan'],
+            ['CAR', 'Mobil'],
+            ['MOTORCYCLE', 'Motor'],
+          ] as const
+        ).map(([value, label]) => (
+          <Button
+            key={value}
+            size="sm"
+            variant={filter === value ? 'default' : 'outline'}
+            aria-pressed={filter === value}
+            onClick={() => setFilter(value)}
+          >
+            {label} (
+            {
+              data.groups.filter(
+                (g) => g.type !== 'INDEPENDENT' && (value === 'ALL' || g.type === value),
+              ).length
+            }
+            )
+          </Button>
+        ))}
+      </div>
       <Notice error>{error}</Notice>
       <Notice>{success}</Notice>
       {driver && (
@@ -88,7 +127,7 @@ export function TransportPicker({ slug, initial }: { slug: string; initial: Stat
       )}
       <div className="stack-sm">
         {data.groups
-          .filter((g) => g.type !== 'INDEPENDENT')
+          .filter((g) => g.type !== 'INDEPENDENT' && (filter === 'ALL' || g.type === filter))
           .map((g) => {
             const members = data.members.filter((m) => m.transport_group_id === g.id);
             const remaining = g.capacity - members.length;
@@ -103,6 +142,11 @@ export function TransportPicker({ slug, initial }: { slug: string; initial: Stat
                     </span>
                     <div>
                       <h3>{g.label}</h3>
+                      <p className="text-sm">
+                        {g.type === 'CAR' ? 'Mobil' : 'Motor'} · Pemilik:{' '}
+                        {data.participants.find((p) => p.id === g.owner_participant_id)?.name ||
+                          'Disediakan organizer'}
+                      </p>
                       <p className="text-sm">
                         Driver:{' '}
                         {data.participants.find((p) => p.id === g.driver_participant_id)?.name ||
@@ -151,10 +195,12 @@ export function TransportPicker({ slug, initial }: { slug: string; initial: Stat
             );
           })}
       </div>
-      {!data.groups.some((g) => g.type !== 'INDEPENDENT') && (
+      {!data.groups.some(
+        (g) => g.type !== 'INDEPENDENT' && (filter === 'ALL' || g.type === filter),
+      ) && (
         <p>
-          Organizer belum menambahkan kendaraan bersama. Kamu bisa memilih berangkat mandiri atau
-          kembali lagi nanti.
+          Belum ada kendaraan untuk kategori ini. Pilih kategori lain atau hubungi organizer untuk
+          menambahkan kendaraan yang ditawarkan peserta.
         </p>
       )}
       <div

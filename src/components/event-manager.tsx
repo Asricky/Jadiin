@@ -28,6 +28,7 @@ import { CopyButton, Notice, UploadField } from './common';
 import { PlanningAnalytics } from './analytics';
 import { DatesEditor, VillaEditor } from './editors';
 import { VillaCard } from './villa-card';
+import { orderedVillas } from '@/lib/villa-recommendations';
 import { PaymentsPanel } from './payments-panel';
 import { TransportRoster } from './transport-roster';
 import { Transport } from './transport';
@@ -283,7 +284,7 @@ export function EventManager({ data, tab, appUrl }: { data: Bundle; tab: string;
               )}
               {!addVilla &&
                 !editing &&
-                data.villas.map((v) => (
+                orderedVillas(data.villas, event.recommended_villa_id).map((v) => (
                   <div className="card stack-sm" key={v.id}>
                     <div className="row between">
                       <h3>{v.name}</h3>
@@ -295,7 +296,27 @@ export function EventManager({ data, tab, appUrl }: { data: Bundle; tab: string;
                       {rupiah(v.price)} · {v.capacity} orang ·{' '}
                       {data.votes.filter((x) => x.villa_id === v.id).length} suara
                     </p>
-                    <VillaCard villa={v} images={data.images} />
+                    <VillaCard
+                      villa={v}
+                      images={data.images}
+                      recommended={v.id === event.recommended_villa_id}
+                      final={v.id === event.final_villa_id}
+                    />
+                    {!locked && v.active && (
+                      <Button
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() =>
+                          void act('recommend_villa', {
+                            id: event.recommended_villa_id === v.id ? '' : v.id,
+                          })
+                        }
+                      >
+                        {event.recommended_villa_id === v.id
+                          ? 'Hapus rekomendasi utama'
+                          : 'Jadikan rekomendasi utama'}
+                      </Button>
+                    )}
                     <p style={{ fontSize: 12 }}>
                       Pemilih:{' '}
                       {data.participants

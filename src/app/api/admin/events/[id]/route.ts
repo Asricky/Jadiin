@@ -22,6 +22,14 @@ export async function POST(req: Request, ctx: Ctx) {
     if (!Object.hasOwn(actions, body.action) || body.action === 'create')
       throw new HttpError('Aksi tidak valid');
     const parsed = actions[body.action as keyof typeof actions].parse(body.data);
+    if (body.action === 'recommend_villa') {
+      const { data: result, error } = await db.rpc('recommend_villa', {
+        p_event: event.id,
+        p_villa: (parsed as { id: string }).id || null,
+      });
+      if (error) throw error;
+      return NextResponse.json({ id: result });
+    }
     let data: object = parsed;
     let access_url: string | undefined;
     let imagePath: string | undefined;

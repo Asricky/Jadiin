@@ -74,6 +74,7 @@ const date = z
   .regex(/^\d{4}-\d{2}-\d{2}$/)
   .refine((s) => !Number.isNaN(Date.parse(s)) && new Date(s).toISOString().slice(0, 10) === s);
 export const actions = {
+  recommend_villa: z.object({ id: z.union([z.string().uuid(), z.literal('')]) }),
   add_participant: identity,
   payment_methods: z.object({
     methods: z

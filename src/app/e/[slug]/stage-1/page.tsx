@@ -15,7 +15,7 @@ export default async function Stage1({ params }: { params: Promise<{ slug: strin
     <main className="narrow section stack">
       <span className="eyebrow">{event.name}</span>
       <StageOne
-        event={{ id: event.id, slug: event.slug }}
+        event={{ id: event.id, slug: event.slug, recommended_villa_id: event.recommended_villa_id }}
         dates={data.dates}
         villas={data.villas}
         images={data.images}

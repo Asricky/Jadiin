@@ -42,6 +42,10 @@ flowchart LR
 
 **Tahap 2 — bereskan keberangkatan.** Peserta memilih kendaraan dengan kapasitas yang diperiksa database, melihat tagihan, lalu mengirim bukti pembayaran. Organizer melihat siapa ikut siapa dan siapa yang belum membayar.
 
+Peserta yang tidak membawa kendaraan dapat langsung menekan **Ikut** pada mobil atau motor yang tersedia. Filter kendaraan, sisa kursi, driver, dan daftar penumpang membantu memilih teman seperjalanan.
+
+Di menu **Villa**, organizer dapat menetapkan **rekomendasi utama** yang muncul paling atas pada pilihan tahap 1 dan preview tahap 2. Rekomendasi ini terpisah dari hasil vote dan keputusan **villa final**. Menonaktifkan atau menghapus villa akan melepas rekomendasinya; event selesai tetap hanya dapat dibaca.
+
 Di menu **Transport**, penawaran mobil dan motor dikelompokkan beserta pemilik, usulan driver, dan kapasitasnya. Organizer dapat menggeser peserta ke kendaraan atau memakai dropdown di ponsel. **Tambah peserta** menerima peserta susulan tanpa mengarang jawaban tahap 1; bagikan link akses pribadinya agar ia dapat memilih kursi dan membayar.
 
 Di menu **Pembayaran**, atur nominal dan rekening utama, lalu gunakan **Tambah metode pembayaran** untuk menyediakan rekening tambahan (maksimal 10 rekening). Peserta mentransfer penuh ke salah satu rekening dan memilih tujuan saat mengunggah bukti. Tujuan transfer disimpan bersama pembayaran, sehingga perubahan rekening tidak mengubah catatan bukti yang sudah masuk.
