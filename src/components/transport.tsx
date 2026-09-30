@@ -65,7 +65,11 @@ export function Transport({ data, act, locked }: { data: Bundle; act: Act; locke
   const unassigned = data.participants.filter(
     (p) => !data.members.some((m) => m.participant_id === p.id),
   );
-  const driverIds = new Set(data.groups.map((g) => g.driver_participant_id));
+  const driverIds = new Set(
+    data.groups
+      .filter((g) => g.type !== 'INDEPENDENT')
+      .flatMap((g) => [g.driver_participant_id, g.owner_participant_id]),
+  );
   async function end(e: DragEndEvent) {
     setActiveId(null);
     if (locked || busy || !e.over) return;
@@ -345,8 +349,8 @@ export function Transport({ data, act, locked }: { data: Bundle; act: Act; locke
                   <Person
                     key={m.participant_id}
                     id={m.participant_id}
-                    name={`${data.participants.find((p) => p.id === m.participant_id)?.name}${m.role === 'DRIVER' ? ' · Driver' : ''}`}
-                    disabled={locked || busy || m.role === 'DRIVER'}
+                    name={`${data.participants.find((p) => p.id === m.participant_id)?.name}${g.type !== 'INDEPENDENT' && m.participant_id === g.owner_participant_id ? ' · Pemilik' : ''}${m.role === 'DRIVER' ? ' · Driver' : ''}`}
+                    disabled={locked || busy || driverIds.has(m.participant_id)}
                   />
                 ))}
             </Drop>

@@ -19,6 +19,14 @@ export const prettyDate = (s: string) =>
         year: 'numeric',
       }).format(new Date(s))
     : format(parseISO(s), 'EEEE, d MMM yyyy', { locale: id });
+export function tripDateRange(start: string, end: string) {
+  const first = parseISO(start),
+    last = parseISO(end);
+  const label = (date: Date, pattern: string) => format(date, pattern, { locale: id });
+  if (start === end) return label(first, 'd MMMM yyyy');
+  const sameYear = first.getFullYear() === last.getFullYear();
+  return `${label(first, sameYear ? (first.getMonth() === last.getMonth() ? 'd' : 'd MMMM') : 'd MMMM yyyy')}–${label(last, 'd MMMM yyyy')}`;
+}
 export const inputDateTime = (s: string | null) =>
   s ? new Date(new Date(s).getTime() + 7 * 60 * 60 * 1000).toISOString().slice(0, 16) : '';
 export const mediaUrl = (path: string | null) =>

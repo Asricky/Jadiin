@@ -40,6 +40,7 @@ export async function POST(req: Request, ctx: Context) {
     const { event, participant } = await actor(ctx);
     const input = z
       .object({ group_id: z.string().uuid().nullable(), independent: z.boolean().default(false) })
+      .strict()
       .parse(await req.json());
     const { data, error } = await service().rpc('choose_transport', {
       p_event: event.id,

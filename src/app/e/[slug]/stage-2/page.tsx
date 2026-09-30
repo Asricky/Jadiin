@@ -6,9 +6,8 @@ import { redirect } from 'next/navigation';
 import { publicEvent, bundle } from '@/lib/server';
 import { session } from '@/lib/session';
 import { service } from '@/lib/supabase/server';
-import { prettyDate, rupiah } from '@/lib/utils';
+import { prettyDate, rupiah, tripDateRange } from '@/lib/utils';
 import { CopyButton } from '@/components/common';
-import { VillaRecommendations } from '@/components/villa-recommendations';
 import { PaymentUpload } from '@/components/payment-upload';
 export default async function Stage2({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -28,22 +27,14 @@ export default async function Stage2({ params }: { params: Promise<{ slug: strin
   const villa = data.villas.find((v) => v.id === event.final_villa_id);
   const amount = payment && payment.status !== 'REJECTED' ? payment.amount : event.cost_per_person!;
   return (
-    <main className="narrow section stack">
+    <main className="narrow section stack final-plan">
       <span className="eyebrow">{event.name}</span>
       <h1>{event.status === 'COMPLETED' ? 'Acara selesai' : 'Rencana final'}</h1>
-      <p>{p.name}, berikut tanggal, tempat, transport, dan biaya acara.</p>
-      <section className="card card-lime">
-        <small className="eyebrow">CATAT TANGGALNYA</small>
-        <h2 style={{ marginTop: 12 }}>
-          {prettyDate(event.final_date!)} - {prettyDate(event.final_end_date!)}
-        </h2>
-      </section>
-      {villa && (
-        <div className="notice">
-          <strong>Villa final: {villa.name}</strong>
-          <p>Ini lokasi acara yang sudah ditetapkan organizer.</p>
-        </div>
-      )}
+      <p className="final-trip-line" aria-label="Tanggal dan tujuan perjalanan">
+        <span>{tripDateRange(event.final_date!, event.final_end_date!)}</span>
+        <span aria-hidden="true"> • </span>
+        <strong title={villa?.name}>{villa?.name || 'Tujuan belum ditetapkan'}</strong>
+      </p>
       <TransportPicker
         slug={slug}
         initial={{
@@ -54,8 +45,7 @@ export default async function Stage2({ params }: { params: Promise<{ slug: strin
           open: event.status === 'STAGE_2_OPEN',
         }}
       />
-      <VillaRecommendations data={data} />
-      <section className="card stack">
+      <section className="card stack" id="payment" aria-label="Pembayaran">
         <span className="eyebrow">02 / PEMBAYARAN</span>
         <h2>
           {rupiah(amount)} <small className="muted">/ orang</small>

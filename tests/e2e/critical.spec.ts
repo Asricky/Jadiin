@@ -650,6 +650,39 @@ test('RLS, RPC isolation, transaction rollback, capacity and token rotation', as
     expect(
       (await db.from('transport_members').select('*').eq('transport_group_id', gid)).data,
     ).toHaveLength(2);
+    const occupied = (await db.from('transport_members').select('participant_id').eq('event_id', e))
+      .data!;
+    const separateOwner = ids.find((id) => !occupied.some((m) => m.participant_id === id));
+    const { data: separateDriver, error: addedError } = await act(a, e, 'add_participant', {
+      name: 'Driver tambahan',
+      whatsapp: '6281234567899',
+      vehicle_type: 'NONE',
+      hash: hash(),
+    });
+    expect(addedError).toBeNull();
+    const details = {
+      type: 'CAR',
+      label: 'Mobil pemilik berbeda',
+      capacity: 3,
+      owner_participant_id: separateOwner,
+      driver_participant_id: separateDriver,
+    };
+    expect((await act(a, e, 'group', { ...details, capacity: 1 })).error).toBeTruthy();
+    const { data: reservedCar, error: reservedError } = await act(a, e, 'group', details);
+    expect(reservedError).toBeNull();
+    expect(
+      (await db.from('transport_members').select('*').eq('transport_group_id', reservedCar)).data,
+    ).toHaveLength(2);
+    expect(
+      (await act(a, e, 'assign', { participant_id: separateOwner, group_id: '' })).error,
+    ).toBeTruthy();
+    expect(
+      (await db.from('transport_members').delete().eq('participant_id', separateOwner)).error,
+    ).toBeTruthy();
+    expect((await act(a, e, 'delete_group', { id: reservedCar })).error).toBeNull();
+    expect(
+      (await db.from('transport_members').select('*').eq('transport_group_id', reservedCar)).data,
+    ).toHaveLength(0);
     const token = hash();
     await act(a, e, 'rotate_token', { id: ids[0], hash: token });
     expect(

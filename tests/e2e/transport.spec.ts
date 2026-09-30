@@ -1,5 +1,6 @@
 ﻿import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
+import { randomBytes } from 'node:crypto';
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -120,15 +121,46 @@ test('participants claim seats atomically, switch safely, and stale payment amou
     await act('status', { status: 'STAGE_2_OPEN' });
     const p1 = await contexts[1].newPage();
     await p1.goto(`/e/${slug}/stage-2`);
-    const previews = p1.getByRole('region', { name: 'Preview pilihan villa' });
-    await expect(previews.locator('.villa-card').first()).toContainText('Villa Pemandangan');
-    await expect(previews.locator('.villa-card').first()).toContainText('Rekomendasi utama admin');
-    await expect(previews.locator('.villa-card').filter({ hasText: 'Rumah Kebun' })).toContainText(
-      'Villa final',
+    await expect(p1.locator('.villa-card')).toHaveCount(0);
+    await expect(p1.getByRole('region', { name: 'Preview pilihan villa' })).toHaveCount(0);
+    await expect(p1.locator('.final-trip-line')).toContainText('Rumah Kebun');
+    expect(await p1.locator('#transport').evaluate((el) => el.nextElementSibling?.id)).toBe(
+      'payment',
     );
+    expect(
+      (await db.from('transport_members').select('*').eq('transport_group_id', group)).data,
+    ).toHaveLength(1);
     await expect(p1.getByRole('button', { name: 'Ikut Mobil Raka' })).toBeVisible();
-    await p1.getByRole('button', { name: 'Ikut Mobil Raka' }).click();
+    // Actual touch drag, using the handle instead of locking the whole page scroll.
+    await p1.locator('#transport').evaluate((el) => el.scrollIntoView({ block: 'start' }));
+    const handle = await p1
+      .getByRole('button', { name: 'Geser transport untuk Nadia' })
+      .boundingBox();
+    const carBounds = await p1.locator(`[data-transport-drop="${group}"]`).boundingBox();
+    const touch = await contexts[1].newCDPSession(p1);
+    await touch.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ x: handle!.x + 20, y: handle!.y + 20 }],
+    });
+    await p1.waitForTimeout(250); // TouchSensor activation threshold.
+    for (let i = 1; i <= 10; i++)
+      await touch.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [
+          {
+            x: handle!.x + 20 + ((carBounds!.x + carBounds!.width / 2 - handle!.x - 20) * i) / 10,
+            y: handle!.y + 20 + ((carBounds!.y + carBounds!.height / 2 - handle!.y - 20) * i) / 10,
+          },
+        ],
+      });
+    await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await touch.detach();
     await expect(p1.getByRole('button', { name: 'Kendaraanmu', exact: true })).toBeVisible();
+    await expect(p1.locator('[data-transport-drop="unassigned"]')).not.toContainText('Nadia');
+    await p1.reload();
+    await expect(p1.locator(`[data-transport-drop="${group}"]`)).toContainText('Nadia');
+    await expect(p1.getByLabel('Tujuan transfer', { exact: true })).toBeVisible();
+    await expect(p1.locator('.transport-columns')).toBeVisible();
     await p1.screenshot({ path: 'test-results/transport-stage2-mobile.png', fullPage: true });
     expect(await p1.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await p1.getByRole('button', { name: 'Lepas pilihan transport' }).click();
@@ -138,6 +170,7 @@ test('participants claim seats atomically, switch safely, and stale payment amou
         headers: { Origin: origin },
         data,
       });
+    expect((await request(1, { group_id: group, participant_id: ids[2] })).status()).toBe(400);
     const race = await Promise.all([
       request(1, { group_id: group }),
       request(2, { group_id: group }),
@@ -222,7 +255,7 @@ test('participants claim seats atomically, switch safely, and stale payment amou
     await page.getByRole('button', { name: 'Jadikan rekomendasi utama', exact: true }).click();
     await expect(page.locator('.villa-card').first()).toContainText('Rumah Kebun');
     await p1.reload();
-    await expect(previews.locator('.villa-card').first()).toContainText('Rumah Kebun');
+    await expect(p1.locator('.villa-card')).toHaveCount(0);
     expect(
       (await db.from('events').select('final_villa_id').eq('id', eid).single()).data
         ?.final_villa_id,
@@ -333,9 +366,93 @@ test('participants claim seats atomically, switch safely, and stale payment amou
     await latePage.goto(added.access_url);
     await latePage.getByRole('button', { name: 'Buka jawaban saya' }).click();
     await expect(latePage).toHaveURL(/stage-2$/);
-    await latePage.getByRole('button', { name: 'Motor (1)', exact: true }).click();
-    await expect(latePage.getByRole('button', { name: 'Ikut Mobil Raka' })).toHaveCount(0);
-    await latePage.getByRole('button', { name: 'Ikut Motor teman' }).click();
+    expect(
+      (await db.from('transport_members').select('*').eq('transport_group_id', motorcycle)).data,
+    ).toHaveLength(1);
+    async function dragLate(target: string) {
+      const chip = latePage.getByRole('button', { name: 'Geser transport untuk Dimas Susulan' });
+      await chip.scrollIntoViewIfNeeded();
+      const from = (await chip.boundingBox())!,
+        to = (await latePage.locator(`[data-transport-drop="${target}"]`).boundingBox())!;
+      await latePage.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+      await latePage.mouse.down();
+      await latePage.mouse.move(from.x + from.width / 2 + 10, from.y + from.height / 2, {
+        steps: 4,
+      });
+      await latePage.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 15 });
+      await latePage.mouse.up();
+      await expect(latePage.locator(`[data-transport-drop="${target}"]`)).toContainText(
+        'Dimas Susulan',
+      );
+      expect(
+        (await db.from('transport_members').select('*').eq('participant_id', added.id)).data,
+      ).toHaveLength(1);
+    }
+    await dragLate(motorcycle);
+    await expect(latePage.locator('[data-transport-drop="unassigned"]')).not.toContainText(
+      'Dimas Susulan',
+    );
+    await latePage.reload();
+    await expect(latePage.locator(`[data-transport-drop="${motorcycle}"]`)).toContainText(
+      'Dimas Susulan',
+    );
+    await latePage.getByRole('button', { name: 'Pilih berangkat mandiri' }).click();
+    await expect(latePage.locator('[data-transport-drop="independent"]')).toContainText(
+      'Dimas Susulan',
+    );
+    await expect(latePage.locator('[data-transport-drop="unassigned"]')).not.toContainText(
+      'Dimas Susulan',
+    );
+    await latePage.reload();
+    await expect(latePage.getByRole('button', { name: 'Pilihanmu: mandiri' })).toBeVisible();
+    await latePage.getByRole('button', { name: 'Batalkan berangkat mandiri' }).click();
+    await expect(latePage.locator('[data-transport-drop="unassigned"]')).toContainText(
+      'Dimas Susulan',
+    );
+    await latePage.getByRole('button', { name: 'Ikut Mobil Raka' }).click();
+    await expect(latePage.locator(`[data-transport-drop="${group}"]`)).toContainText(
+      'Dimas Susulan',
+    );
+    await dragLate(motorcycle);
+    expect(await latePage.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await expect(latePage.locator('.transport-drag-preview')).toHaveCount(0);
+    await latePage.screenshot({ path: 'test-results/final-plan-desktop.png', fullPage: true });
+    // Same-category and cross-category moves preserve a single assignment.
+    for (const type of ['CAR', 'MOTORCYCLE']) {
+      const driver = await act('add_participant', {
+        name: `Driver ${type} tambahan`,
+        whatsapp: '6281234567888',
+        vehicle_type: type,
+        hash: randomBytes(32).toString('hex'),
+      });
+      const extraGroup = await act('group', {
+        type,
+        label: `${type} tambahan`,
+        capacity: 2,
+        owner_participant_id: driver,
+        driver_participant_id: driver,
+      });
+      await latePage.reload();
+      if (type === 'CAR') {
+        await latePage.getByRole('button', { name: 'Ikut Mobil Raka' }).click();
+        await expect(latePage.locator(`[data-transport-drop="${group}"]`)).toContainText(
+          'Dimas Susulan',
+        );
+      }
+      await latePage.getByRole('button', { name: `Ikut ${type} tambahan` }).click();
+      await expect(latePage.locator(`[data-transport-drop="${extraGroup}"]`)).toContainText(
+        'Dimas Susulan',
+      );
+      expect(
+        (await db.from('transport_members').select('*').eq('participant_id', added.id)).data,
+      ).toHaveLength(1);
+      await latePage.getByRole('button', { name: 'Ikut Motor teman' }).click();
+      await expect(latePage.locator(`[data-transport-drop="${motorcycle}"]`)).toContainText(
+        'Dimas Susulan',
+      );
+    }
     await expect(latePage.getByRole('button', { name: 'Kendaraanmu', exact: true })).toBeVisible();
     expect(
       (

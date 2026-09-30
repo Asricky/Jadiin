@@ -42,9 +42,11 @@ flowchart LR
 
 **Tahap 2 — bereskan keberangkatan.** Peserta memilih kendaraan dengan kapasitas yang diperiksa database, melihat tagihan, lalu mengirim bukti pembayaran. Organizer melihat siapa ikut siapa dan siapa yang belum membayar.
 
-Peserta yang tidak membawa kendaraan dapat langsung menekan **Ikut** pada mobil atau motor yang tersedia. Filter kendaraan, sisa kursi, driver, dan daftar penumpang membantu memilih teman seperjalanan.
+Pada **Rencana Final**, tanggal dan tujuan diringkas dalam satu baris, lalu papan **Mobil / Motor**, **Belum Punya Transportasi**, dan **Berangkat Mandiri**. Peserta dapat menggeser namanya sendiri lewat pegangan titik (tahan sebentar pada layar sentuh), atau menekan **Ikut**. Admin tetap dapat mengatur semua peserta. Setelah transport, alur langsung menuju pembayaran dan upload bukti, tanpa preview atau pilihan villa.
 
-Di menu **Villa**, organizer dapat menetapkan **rekomendasi utama** yang muncul paling atas pada pilihan tahap 1 dan preview tahap 2. Rekomendasi ini terpisah dari hasil vote dan keputusan **villa final**. Menonaktifkan atau menghapus villa akan melepas rekomendasinya; event selesai tetap hanya dapat dibaca.
+Di menu **Villa**, organizer dapat menetapkan **rekomendasi utama** yang muncul paling atas pada pilihan tahap 1. Rekomendasi ini terpisah dari hasil vote dan keputusan **villa final**. Menonaktifkan atau menghapus villa akan melepas rekomendasinya; event selesai tetap hanya dapat dibaca.
+
+Migrasi `202609300008_transport_owner_seats.sql` mempertahankan tabel transport existing. Trigger mereservasi kursi pemilik yang berbeda dari driver, membatasi kapasitas, dan mencegah pemilik/driver dipindahkan sebelum kendaraannya dihapus. Unique index membatasi satu kendaraan bersama per pemilik. Pemilik yang juga menjadi driver dihitung sekali; pemilik dan driver berbeda dihitung dua kursi. Status mandiri tetap menggunakan grup `INDEPENDENT`, tanpa sumber data baru. Backfill akan berhenti jika data lama bertentangan, alih-alih memindahkan peserta tanpa sengaja.
 
 Di menu **Transport**, penawaran mobil dan motor dikelompokkan beserta pemilik, usulan driver, dan kapasitasnya. Organizer dapat menggeser peserta ke kendaraan atau memakai dropdown di ponsel. **Tambah peserta** menerima peserta susulan tanpa mengarang jawaban tahap 1; bagikan link akses pribadinya agar ia dapat memilih kursi dan membayar.
 
