@@ -42,7 +42,7 @@ flowchart LR
 
 **Tahap 2 — bereskan keberangkatan.** Peserta memilih kendaraan dengan kapasitas yang diperiksa database, melihat tagihan, lalu mengirim bukti pembayaran. Organizer melihat siapa ikut siapa dan siapa yang belum membayar.
 
-Pada **Rencana Final**, tanggal dan tujuan diringkas dalam satu baris, lalu papan **Mobil / Motor**, **Belum Punya Transportasi**, dan **Berangkat Mandiri**. Peserta dapat menggeser namanya sendiri lewat pegangan titik (tahan sebentar pada layar sentuh), atau menekan **Ikut**. Admin tetap dapat mengatur semua peserta. Setelah transport, alur langsung menuju pembayaran dan upload bukti, tanpa preview atau pilihan villa.
+Pada **Rencana Final**, tanggal dan tujuan diringkas dalam satu baris, lalu papan **Mobil / Motor**, **Belum Punya Transportasi**, dan **Berangkat Mandiri**. Pilih tab **Mobil** atau **Motor**, lalu geser nama penumpang lewat pegangan titik (tahan sebentar pada layar sentuh), pilih nama dari daftar **Tambah penumpang**, atau gunakan **Atur penumpang tanpa geser** untuk berpindah kategori. Peserta bersesi valid boleh mengatur penumpang lain dalam event yang sama. Pemilik/driver tetap terkunci; server memvalidasi sesi, event, fase, dan kapasitas secara atomik melalui migrasi `202609300010_collaborative_transport.sql`. Admin tetap dapat mengatur semua peserta. Setelah transport, alur langsung menuju pembayaran dan upload bukti, tanpa preview atau pilihan villa.
 
 Di menu **Villa**, organizer dapat menetapkan **rekomendasi utama** yang muncul paling atas pada pilihan tahap 1. Rekomendasi ini terpisah dari hasil vote dan keputusan **villa final**. Menonaktifkan atau menghapus villa akan melepas rekomendasinya; event selesai tetap hanya dapat dibaca.
 

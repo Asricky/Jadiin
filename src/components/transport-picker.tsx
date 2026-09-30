@@ -103,6 +103,9 @@ function DropArea({
 }
 export function TransportPicker({ slug, initial }: { slug: string; initial: State }) {
   const [data, setData] = useState(initial);
+  const [category, setCategory] = useState<'CAR' | 'MOTORCYCLE'>('CAR');
+  const [selectedPerson, setSelectedPerson] = useState('');
+  const [destination, setDestination] = useState('unassigned');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -152,20 +155,28 @@ export function TransportPicker({ slug, initial }: { slug: string; initial: Stat
   const solo = data.participants.filter((p) =>
     data.members.some((m) => m.participant_id === p.id && independent.has(m.transport_group_id)),
   );
-  async function choose(group_id: string | null, independent = false) {
-    if (inFlight.current || fixed || !data.open) return;
+  async function choose(
+    group_id: string | null,
+    independent = false,
+    participantId = data.participantId,
+  ) {
+    if (inFlight.current || reserved.has(participantId) || !data.open) return;
     inFlight.current = true;
     ++version.current;
     setBusy(true);
     setError('');
     setSuccess('');
     try {
-      await api(`/api/events/${slug}/transport`, { group_id, independent });
+      await api(`/api/events/${slug}/transport`, {
+        group_id,
+        independent,
+        participant_id: participantId,
+      });
       await refresh();
       setSuccess(
         group_id || independent
-          ? 'Pilihan transport tersimpan atas namamu.'
-          : 'Pilihan dilepas. Kamu kembali ke daftar belum punya transportasi.',
+          ? 'Susunan penumpang tersimpan.'
+          : 'Peserta dikembalikan ke daftar belum punya transportasi.',
       );
     } catch (e) {
       setError((e as Error).message);
@@ -178,12 +189,14 @@ export function TransportPicker({ slug, initial }: { slug: string; initial: Stat
   function end(e: DragEndEvent) {
     dragging.current = false;
     setActive(null);
-    if (e.active.id !== data.participantId || !e.over || fixed || busy || !data.open) return;
+    if (reserved.has(String(e.active.id)) || !e.over || busy || !data.open) return;
     const target = String(e.over.id);
-    if (target === mine?.transport_group_id) return;
+    if (target === data.members.find((m) => m.participant_id === e.active.id)?.transport_group_id)
+      return;
     void choose(
       target === 'unassigned' || target === 'independent' ? null : target,
       target === 'independent',
+      String(e.active.id),
     );
   }
   function passenger(p: Person, group?: Group) {
@@ -192,7 +205,7 @@ export function TransportPicker({ slug, initial }: { slug: string; initial: Stat
         key={p.id}
         person={p}
         self={p.id === data.participantId}
-        movable={data.open && !busy && p.id === data.participantId && !reserved.has(p.id)}
+        movable={data.open && !busy && !reserved.has(p.id)}
         owner={group?.type !== 'INDEPENDENT' && group?.owner_participant_id === p.id}
         driver={group?.driver_participant_id === p.id}
       />
@@ -220,8 +233,8 @@ export function TransportPicker({ slug, initial }: { slug: string; initial: Stat
         </Button>
       </div>
       <p className="text-sm">
-        Geser namamu lewat pegangan titik ke mobil atau motor. Di ponsel, tahan pegangannya sebentar
-        lalu geser. Kamu juga bisa memakai tombol Ikut.
+        Geser nama penumpang lewat pegangan titik ke mobil atau motor. Di ponsel, tahan pegangannya
+        sebentar lalu geser. Atau tambahkan penumpang dari daftar tanpa menggeser.
       </p>
       <Notice error>{error}</Notice>
       <Notice>{success}</Notice>
@@ -249,12 +262,26 @@ export function TransportPicker({ slug, initial }: { slug: string; initial: Stat
         accessibility={{
           screenReaderInstructions: {
             draggable:
-              'Tekan spasi untuk mengangkat namamu, tombol panah untuk berpindah, spasi untuk melepas, atau Escape untuk membatalkan. Tombol Ikut juga tersedia.',
+              'Tekan spasi untuk mengangkat nama penumpang, tombol panah untuk berpindah, spasi untuk melepas, atau Escape untuk membatalkan. Tombol Ikut juga tersedia.',
           },
         }}
       >
-        <div className="transport-columns">
+        <div className="transport-tabs" aria-label="Jenis kendaraan">
           {(['CAR', 'MOTORCYCLE'] as const).map((type) => (
+            <Button
+              key={type}
+              variant={category === type ? 'default' : 'outline'}
+              aria-pressed={category === type}
+              onClick={() => setCategory(type)}
+            >
+              {type === 'CAR' ? <Car size={20} /> : <Bike size={20} />}
+              {type === 'CAR' ? 'Mobil' : 'Motor'}{' '}
+              <span>{shared.filter((g) => g.type === type).length}</span>
+            </Button>
+          ))}
+        </div>
+        <div className="transport-columns transport-category">
+          {[category].map((type) => (
             <section
               className="stack-sm transport-column"
               key={type}
@@ -276,7 +303,7 @@ export function TransportPicker({ slug, initial }: { slug: string; initial: Stat
                       key={g.id}
                       id={g.id}
                       label={g.label}
-                      disabled={!data.open || busy || fixed || (full && !selected)}
+                      disabled={!data.open || busy || full}
                       className={selected ? 'chosen' : ''}
                     >
                       <div className="row between">
@@ -302,8 +329,33 @@ export function TransportPicker({ slug, initial }: { slug: string; initial: Stat
                       </div>
                       {!full && (
                         <p className="transport-drop-hint">
-                          {g.capacity - members.length} kursi tersedia. Taruh namamu di sini.
+                          {g.capacity - members.length} kursi tersedia. Taruh nama penumpang di
+                          sini.
                         </p>
+                      )}
+                      {!full && data.open && (
+                        <label className="stack-sm text-sm">
+                          Tambah penumpang
+                          <select
+                            aria-label={`Tambah penumpang ke ${g.label}`}
+                            value=""
+                            disabled={busy || !unassigned.length}
+                            onChange={(e) => {
+                              if (e.target.value) void choose(g.id, false, e.target.value);
+                            }}
+                          >
+                            <option value="">
+                              {unassigned.length
+                                ? 'Pilih nama yang belum punya transportasi'
+                                : 'Semua peserta sudah mendapat transportasi'}
+                            </option>
+                            {unassigned.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
                       )}
                       <Button
                         size="sm"
@@ -358,7 +410,7 @@ export function TransportPicker({ slug, initial }: { slug: string; initial: Stat
         <DropArea
           id="unassigned"
           label="Belum Punya Transportasi"
-          disabled={busy || fixed || !data.open}
+          disabled={busy || !data.open}
           className="unassigned-area"
         >
           <h3>
@@ -369,13 +421,14 @@ export function TransportPicker({ slug, initial }: { slug: string; initial: Stat
             <p className="text-sm muted">Semua peserta sudah menentukan transportasi.</p>
           )}
           <p className="text-sm muted">
-            Kamu hanya dapat memindahkan namamu sendiri. Organizer dapat mengatur semua peserta.
+            Semua penumpang dapat diatur bersama. Kursi pemilik dan driver hanya dapat diubah
+            organizer.
           </p>
         </DropArea>
         <DropArea
           id="independent"
           label="Berangkat Mandiri"
-          disabled={busy || fixed || !data.open}
+          disabled={busy || !data.open}
           className="independent-area"
         >
           <h3 className="row">
@@ -406,6 +459,60 @@ export function TransportPicker({ slug, initial }: { slug: string; initial: Stat
           )}
         </DragOverlay>
       </DndContext>
+      {data.open && (
+        <details className="transport-drop">
+          <summary>Atur penumpang tanpa geser</summary>
+          <p className="text-sm muted">
+            Pindahkan penumpang antar mobil, motor, atau perjalanan mandiri.
+          </p>
+          <label className="stack-sm">
+            Penumpang
+            <select
+              aria-label="Penumpang yang diatur"
+              value={selectedPerson}
+              onChange={(e) => setSelectedPerson(e.target.value)}
+            >
+              <option value="">Pilih penumpang</option>
+              {data.participants
+                .filter((p) => !reserved.has(p.id))
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label className="stack-sm">
+            Tujuan
+            <select
+              aria-label="Tujuan penumpang"
+              value={destination}
+              onChange={(e) => setDestination(e.target.value)}
+            >
+              <option value="unassigned">Belum punya transportasi</option>
+              <option value="independent">Berangkat mandiri</option>
+              {shared.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.label} ({data.members.filter((m) => m.transport_group_id === g.id).length}/
+                  {g.capacity})
+                </option>
+              ))}
+            </select>
+          </label>
+          <Button
+            disabled={busy || !selectedPerson}
+            onClick={() =>
+              void choose(
+                destination === 'unassigned' || destination === 'independent' ? null : destination,
+                destination === 'independent',
+                selectedPerson,
+              )
+            }
+          >
+            Simpan penumpang
+          </Button>
+        </details>
+      )}
       {mine && !ownIndependent && !fixed && data.open && (
         <Button variant="ghost" disabled={busy} onClick={() => void choose(null)}>
           Lepas pilihan transport

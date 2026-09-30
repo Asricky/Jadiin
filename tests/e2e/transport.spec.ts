@@ -134,38 +134,47 @@ test('participants claim seats atomically, switch safely, and stale payment amou
     ).toHaveLength(1);
     await expect(p1.getByRole('button', { name: 'Ikut Mobil Raka' })).toBeVisible();
     // Actual touch drag, using the handle instead of locking the whole page scroll.
-    const grip = p1.getByRole('button', { name: 'Geser transport untuk Nadia' });
-    await grip.scrollIntoViewIfNeeded();
-    const handle = (await grip.boundingBox())!;
-    const touch = await contexts[1].newCDPSession(p1);
-    await touch.send('Input.dispatchTouchEvent', {
-      type: 'touchStart',
-      touchPoints: [{ x: handle.x + 20, y: handle.y + 20 }],
-    });
-    await p1.waitForTimeout(250); // TouchSensor activation threshold.
-    await touch.send('Input.dispatchTouchEvent', {
-      type: 'touchMove',
-      touchPoints: [{ x: handle.x + 20, y: 45 }],
-    });
-    await expect
-      .poll(async () => {
-        const bounds = (await p1.locator(`[data-transport-drop="${group}"]`).boundingBox())!;
-        return bounds.y >= 45 && bounds.y + bounds.height / 2 < 780;
-      })
-      .toBe(true);
-    const carBounds = (await p1.locator(`[data-transport-drop="${group}"]`).boundingBox())!;
-    await touch.send('Input.dispatchTouchEvent', {
-      type: 'touchMove',
-      touchPoints: [
-        { x: carBounds.x + carBounds.width / 2, y: carBounds.y + carBounds.height / 2 },
-      ],
-    });
-    await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-    await touch.detach();
+    async function touchDragPassenger(name: string) {
+      const grip = p1.getByRole('button', { name: `Geser transport untuk ${name}` });
+      await grip.scrollIntoViewIfNeeded();
+      const handle = (await grip.boundingBox())!;
+      const touch = await contexts[1].newCDPSession(p1);
+      await touch.send('Input.dispatchTouchEvent', {
+        type: 'touchStart',
+        touchPoints: [{ x: handle.x + 20, y: handle.y + 20 }],
+      });
+      await p1.waitForTimeout(250); // TouchSensor activation threshold.
+      await touch.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [{ x: handle.x + 20, y: 45 }],
+      });
+      await expect
+        .poll(async () => {
+          const bounds = (await p1
+            .locator(`[data-transport-drop="${group}"] .transport-passengers`)
+            .boundingBox())!;
+          return bounds.y >= 45 && bounds.y + bounds.height / 2 < 780;
+        })
+        .toBe(true);
+      const carBounds = (await p1
+        .locator(`[data-transport-drop="${group}"] .transport-passengers`)
+        .boundingBox())!;
+      await touch.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [
+          { x: carBounds.x + carBounds.width / 2, y: carBounds.y + carBounds.height / 2 },
+        ],
+      });
+      await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await touch.detach();
+    }
+    await touchDragPassenger('Nadia');
     await expect(p1.getByRole('button', { name: 'Kendaraanmu', exact: true })).toBeVisible();
     await expect(p1.locator('[data-transport-drop="unassigned"]')).not.toContainText('Nadia');
     await p1.reload();
-    await expect(p1.locator(`[data-transport-drop="${group}"]`)).toContainText('Nadia');
+    await expect(
+      p1.locator(`[data-transport-drop="${group}"] .transport-passengers`),
+    ).toContainText('Nadia');
     await expect(p1.getByLabel('Tujuan transfer', { exact: true })).toBeVisible();
     await expect(p1.locator('.transport-columns')).toBeVisible();
     await p1.screenshot({ path: 'test-results/transport-stage2-mobile.png', fullPage: true });
@@ -177,7 +186,32 @@ test('participants claim seats atomically, switch safely, and stale payment amou
         headers: { Origin: origin },
         data,
       });
-    expect((await request(1, { group_id: group, participant_id: ids[2] })).status()).toBe(400);
+    // A valid participant can assign another passenger, but never a reserved driver.
+    expect((await request(1, { group_id: group, participant_id: ids[2] })).ok()).toBe(true);
+    expect((await request(0, { group_id: null, participant_id: ids[2] })).ok()).toBe(true);
+    expect((await request(1, { group_id: null, participant_id: ids[0] })).ok()).toBe(false);
+    expect(
+      (
+        await request(1, {
+          group_id: group,
+          participant_id: '00000000-0000-4000-8000-000000000001',
+        })
+      ).ok(),
+    ).toBe(false);
+    await p1.reload();
+    await expect(p1.getByRole('button', { name: 'Geser transport untuk Maura' })).toBeVisible();
+    // Nadia's session drags Maura's name, not only its own name.
+    await touchDragPassenger('Maura');
+    await expect(
+      p1.locator(`[data-transport-drop="${group}"] .transport-passengers`),
+    ).toContainText('Maura');
+    expect((await request(1, { group_id: null, participant_id: ids[2] })).ok()).toBe(true);
+    await p1.reload();
+    await p1.getByLabel('Tambah penumpang ke Mobil Raka', { exact: true }).selectOption(ids[2]);
+    await expect(
+      p1.locator(`[data-transport-drop="${group}"] .transport-passengers`),
+    ).toContainText('Maura');
+    expect((await request(1, { group_id: null, participant_id: ids[2] })).ok()).toBe(true);
     const race = await Promise.all([
       request(1, { group_id: group }),
       request(2, { group_id: group }),
@@ -225,6 +259,31 @@ test('participants claim seats atomically, switch safely, and stale payment amou
       .select('id')
       .single();
     expect((await request(winner, { group_id: foreign!.id })).ok()).toBe(false);
+    const { data: foreignPerson, error: foreignError } = await db
+      .from('participants')
+      .insert({
+        event_id: other,
+        name: 'Other event passenger',
+        whatsapp: '6281234567888',
+        access_token_hash: randomBytes(32).toString('hex'),
+        vehicle_type: 'NONE',
+      })
+      .select('id')
+      .single();
+    expect(foreignError).toBeNull();
+    expect(
+      (await request(winner, { group_id: group, participant_id: foreignPerson!.id })).ok(),
+    ).toBe(false);
+    expect(
+      (
+        await db.rpc('assign_transport', {
+          p_event: eid,
+          p_hash: 'invalid',
+          p_group: group,
+          p_participant: ids[loser],
+        })
+      ).error,
+    ).toBeTruthy();
     const stranger = await browser.newContext({ baseURL: origin });
     contexts.push(stranger);
     expect(
@@ -243,7 +302,7 @@ test('participants claim seats atomically, switch safely, and stale payment amou
       (await owner.rpc('recommend_villa', { p_event: other, p_villa: recommendation })).error,
     ).toBeTruthy();
     expect(
-      (await anonymous.rpc('choose_transport', { p_event: eid, p_hash: 'invalid', p_group: group }))
+      (await anonymous.rpc('assign_transport', { p_event: eid, p_hash: 'invalid', p_group: group }))
         .error,
     ).toBeTruthy();
     const allSeats = await contexts[winner].request.get(`/api/events/${slug}/transport`);
@@ -377,6 +436,18 @@ test('participants claim seats atomically, switch safely, and stale payment amou
       (await db.from('transport_members').select('*').eq('transport_group_id', motorcycle)).data,
     ).toHaveLength(1);
     async function dragLate(target: string) {
+      const targetType = (
+        await db.from('transport_groups').select('type').eq('id', target).single()
+      ).data!.type;
+      const tab = targetType === 'CAR' ? 'Mobil' : 'Motor';
+      // Release the current choice before switching the category, then drag from the shared roster.
+      if (await latePage.getByRole('button', { name: 'Lepas pilihan transport' }).isVisible()) {
+        await latePage.getByRole('button', { name: 'Lepas pilihan transport' }).click();
+        await expect(latePage.locator('[data-transport-drop="unassigned"]')).toContainText(
+          'Dimas Susulan',
+        );
+      }
+      await latePage.locator('.transport-tabs button').filter({ hasText: tab }).click();
       const chip = latePage.getByRole('button', { name: 'Geser transport untuk Dimas Susulan' });
       await chip.scrollIntoViewIfNeeded();
       const from = (await chip.boundingBox())!,
@@ -388,9 +459,9 @@ test('participants claim seats atomically, switch safely, and stale payment amou
       });
       await latePage.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 15 });
       await latePage.mouse.up();
-      await expect(latePage.locator(`[data-transport-drop="${target}"]`)).toContainText(
-        'Dimas Susulan',
-      );
+      await expect(
+        latePage.locator(`[data-transport-drop="${target}"] .transport-passengers`),
+      ).toContainText('Dimas Susulan');
       expect(
         (await db.from('transport_members').select('*').eq('participant_id', added.id)).data,
       ).toHaveLength(1);
@@ -400,9 +471,10 @@ test('participants claim seats atomically, switch safely, and stale payment amou
       'Dimas Susulan',
     );
     await latePage.reload();
-    await expect(latePage.locator(`[data-transport-drop="${motorcycle}"]`)).toContainText(
-      'Dimas Susulan',
-    );
+    await latePage.locator('.transport-tabs button').filter({ hasText: 'Motor' }).click();
+    await expect(
+      latePage.locator(`[data-transport-drop="${motorcycle}"] .transport-passengers`),
+    ).toContainText('Dimas Susulan');
     await latePage.getByRole('button', { name: 'Pilih berangkat mandiri' }).click();
     await expect(latePage.locator('[data-transport-drop="independent"]')).toContainText(
       'Dimas Susulan',
@@ -416,10 +488,11 @@ test('participants claim seats atomically, switch safely, and stale payment amou
     await expect(latePage.locator('[data-transport-drop="unassigned"]')).toContainText(
       'Dimas Susulan',
     );
+    await latePage.locator('.transport-tabs button').filter({ hasText: 'Mobil' }).click();
     await latePage.getByRole('button', { name: 'Ikut Mobil Raka' }).click();
-    await expect(latePage.locator(`[data-transport-drop="${group}"]`)).toContainText(
-      'Dimas Susulan',
-    );
+    await expect(
+      latePage.locator(`[data-transport-drop="${group}"] .transport-passengers`),
+    ).toContainText('Dimas Susulan');
     await dragLate(motorcycle);
     expect(await latePage.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
@@ -443,22 +516,28 @@ test('participants claim seats atomically, switch safely, and stale payment amou
       });
       await latePage.reload();
       if (type === 'CAR') {
+        await latePage.locator('.transport-tabs button').filter({ hasText: 'Mobil' }).click();
         await latePage.getByRole('button', { name: 'Ikut Mobil Raka' }).click();
-        await expect(latePage.locator(`[data-transport-drop="${group}"]`)).toContainText(
-          'Dimas Susulan',
-        );
+        await expect(
+          latePage.locator(`[data-transport-drop="${group}"] .transport-passengers`),
+        ).toContainText('Dimas Susulan');
       }
+      await latePage
+        .locator('.transport-tabs button')
+        .filter({ hasText: type === 'CAR' ? 'Mobil' : 'Motor' })
+        .click();
       await latePage.getByRole('button', { name: `Ikut ${type} tambahan` }).click();
-      await expect(latePage.locator(`[data-transport-drop="${extraGroup}"]`)).toContainText(
-        'Dimas Susulan',
-      );
+      await expect(
+        latePage.locator(`[data-transport-drop="${extraGroup}"] .transport-passengers`),
+      ).toContainText('Dimas Susulan');
       expect(
         (await db.from('transport_members').select('*').eq('participant_id', added.id)).data,
       ).toHaveLength(1);
+      await latePage.locator('.transport-tabs button').filter({ hasText: 'Motor' }).click();
       await latePage.getByRole('button', { name: 'Ikut Motor teman' }).click();
-      await expect(latePage.locator(`[data-transport-drop="${motorcycle}"]`)).toContainText(
-        'Dimas Susulan',
-      );
+      await expect(
+        latePage.locator(`[data-transport-drop="${motorcycle}"] .transport-passengers`),
+      ).toContainText('Dimas Susulan');
     }
     await expect(latePage.getByRole('button', { name: 'Kendaraanmu', exact: true })).toBeVisible();
     expect(
@@ -548,6 +627,7 @@ test('participants claim seats atomically, switch safely, and stale payment amou
       (await db.from('transport_members').select('*').eq('transport_group_id', motorOffer.id)).data,
     ).toHaveLength(1);
     await latePage.goto(`/e/${slug}/stage-2`);
+    await latePage.locator('.transport-tabs button').filter({ hasText: 'Motor' }).click();
     await expect(
       latePage.getByRole('heading', { name: 'Motor Penyedia Motor', exact: true }),
     ).toBeVisible();

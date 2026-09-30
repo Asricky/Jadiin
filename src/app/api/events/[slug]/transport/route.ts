@@ -41,14 +41,19 @@ export async function POST(req: Request, ctx: Context) {
     await rate(req, 'choose-transport', 60);
     const { event, participant } = await actor(ctx);
     const input = z
-      .object({ group_id: z.string().uuid().nullable(), independent: z.boolean().default(false) })
+      .object({
+        group_id: z.string().uuid().nullable(),
+        independent: z.boolean().default(false),
+        participant_id: z.string().uuid().optional(),
+      })
       .strict()
       .parse(await req.json());
-    const { data, error } = await service().rpc('choose_transport', {
+    const { data, error } = await service().rpc('assign_transport', {
       p_event: event.id,
       p_hash: participant.hash,
       p_group: input.group_id,
       p_independent: input.independent,
+      p_participant: input.participant_id ?? participant.id,
     });
     if (error) throw error;
     return NextResponse.json({ group_id: data });
