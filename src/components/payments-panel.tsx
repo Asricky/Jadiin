@@ -182,6 +182,9 @@ export function PaymentsPanel({ data, act, locked }: { data: Bundle; act: Act; l
           ))}
         </select>
       </div>
+      <p className="text-sm muted">
+        Bukti yang menunggu verifikasi ditampilkan paling atas, mulai dari yang terbaru masuk.
+      </p>
       <Notice error>{error}</Notice>
       <div className="payment-list">
         {summary.rows
@@ -189,6 +192,14 @@ export function PaymentsPanel({ data, act, locked }: { data: Bundle; act: Act; l
             (r) =>
               (filter === 'ALL' || r.status === filter) &&
               r.participant.name.toLowerCase().includes(query.toLowerCase()),
+          )
+          .sort(
+            (a, b) =>
+              Number(b.status === 'PENDING') - Number(a.status === 'PENDING') ||
+              Number(Boolean(b.payment)) - Number(Boolean(a.payment)) ||
+              (b.payment ? Date.parse(b.payment.submitted_at) : 0) -
+                (a.payment ? Date.parse(a.payment.submitted_at) : 0) ||
+              a.participant.name.localeCompare(b.participant.name, 'id'),
           )
           .map(({ participant, payment, due, status }) => (
             <article className="payment-row" key={participant.id}>
