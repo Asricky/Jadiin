@@ -8,21 +8,23 @@ import { session } from '@/lib/session';
 import { service } from '@/lib/supabase/server';
 import { prettyDate, rupiah, tripDateRange } from '@/lib/utils';
 import { CopyButton } from '@/components/common';
-import { PaymentUpload } from '@/components/payment-upload';
+import { PaymentRegistration } from '@/components/payment-registration';
 export default async function Stage2({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const event = await publicEvent(slug);
   const p = await session(event.id);
-  if (!p) redirect(`/e/${slug}`);
+  if (!p && event.status === 'COMPLETED') redirect(`/e/${slug}`);
   if (!['STAGE_2_OPEN', 'COMPLETED'].includes(event.status)) redirect(`/e/${slug}/dashboard`);
   const [data, { data: payment }] = await Promise.all([
     bundle(event),
-    service()
-      .from('payments')
-      .select('status,admin_note,amount,payment_method')
-      .eq('participant_id', p.id)
-      .eq('event_id', event.id)
-      .maybeSingle(),
+    p
+      ? service()
+          .from('payments')
+          .select('status,admin_note,amount,payment_method')
+          .eq('participant_id', p.id)
+          .eq('event_id', event.id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
   const villa = data.villas.find((v) => v.id === event.final_villa_id);
   const amount = payment && payment.status !== 'REJECTED' ? payment.amount : event.cost_per_person!;
@@ -77,23 +79,33 @@ export default async function Stage2({ params }: { params: Promise<{ slug: strin
       {event.status === 'STAGE_2_OPEN' &&
         (!payment || payment.status === 'REJECTED') &&
         (!event.stage2_deadline || new Date(event.stage2_deadline) > new Date()) && (
-          <section className="stack">
-            <h2>Kirim bukti pembayaran</h2>
-            <p>Bukti hanya bisa dilihat organizer, tersimpan secara private.</p>
-            <PaymentUpload
-              eventId={event.id}
-              slug={slug}
-              amount={amount}
-              methods={paymentMethods(event)}
-            />
-          </section>
+          <PaymentRegistration
+            eventId={event.id}
+            slug={slug}
+            amount={amount}
+            methods={paymentMethods(event)}
+            participant={
+              p
+                ? {
+                    name: p.name,
+                    whatsapp: p.whatsapp,
+                    vehicle_type: p.vehicle_type,
+                    vehicle_owner: p.vehicle_owner,
+                    vehicle_driver: p.vehicle_driver,
+                    vehicle_capacity: p.vehicle_capacity,
+                  }
+                : null
+            }
+          />
         )}
-      <div>
-        <CopyButton
-          value={`${appOrigin()}/e/${slug}/p/${p.token}`}
-          label="Simpan link akses pribadi"
-        />
-      </div>
+      {p && (
+        <div>
+          <CopyButton
+            value={`${appOrigin()}/e/${slug}/p/${p.token}`}
+            label="Simpan link akses pribadi"
+          />
+        </div>
+      )}
     </main>
   );
 }

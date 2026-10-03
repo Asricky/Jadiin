@@ -28,6 +28,9 @@ export default async function Landing({
   const open =
     event.status === 'STAGE_1_OPEN' &&
     (!event.stage1_deadline || new Date(event.stage1_deadline) > new Date());
+  const paymentOpen =
+    event.status === 'STAGE_2_OPEN' &&
+    (!event.stage2_deadline || new Date(event.stage2_deadline) > new Date());
   return (
     <main className="narrow section stack">
       {event.cover_path && (
@@ -64,6 +67,10 @@ export default async function Landing({
         <Link className="button" href={`/e/${slug}/dashboard`}>
           Lanjutkan, {p.name}
           <ArrowRight size={18} />
+        </Link>
+      ) : paymentOpen ? (
+        <Link className="button" href={`/e/${slug}/stage-2`}>
+          Daftar & bayar <ArrowRight size={18} />
         </Link>
       ) : open ? (
         <Link className="button" href={`/e/${slug}/stage-1`}>

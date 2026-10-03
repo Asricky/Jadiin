@@ -26,7 +26,7 @@ export async function session(eventId: string) {
   const { data, error } = await service()
     .from('participants')
     .select(
-      'id,name,whatsapp,vehicle_type,vehicle_owner,vehicle_driver,vehicle_capacity,stage2_submitted_at',
+      'id,name,whatsapp,vehicle_type,vehicle_owner,vehicle_driver,vehicle_capacity,stage2_submitted_at,payment_details_confirmed_at',
     )
     .eq('event_id', eventId)
     .eq('access_token_hash', hash)

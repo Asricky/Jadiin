@@ -24,6 +24,8 @@ export async function POST(req: Request) {
       } else {
         const p = await session(input.event_id);
         if (!p) throw new HttpError('Sesi tidak valid', 401);
+        if (!p.payment_details_confirmed_at)
+          throw new HttpError('Konfirmasi nama dan kendaraan sebelum mengunggah bukti pembayaran');
         participantId = p.id;
         const { data: e } = await db.from('events').select('*').eq('id', input.event_id).single();
         if (
@@ -78,6 +80,8 @@ export async function POST(req: Request) {
     const p = u.kind === 'payment' ? await session(u.event_id) : null;
     if (u.kind === 'payment' && p?.id !== u.participant_id)
       throw new HttpError('Sesi tidak valid', 401);
+    if (u.kind === 'payment' && !p?.payment_details_confirmed_at)
+      throw new HttpError('Konfirmasi nama dan kendaraan sebelum mengunggah bukti pembayaran');
     const bucket = u.kind === 'payment' ? 'payment-proofs' : 'villa-media';
     const { data: file, error } = await db.storage.from(bucket).download(u.path);
     if (error || !file) throw new HttpError('File belum terunggah');

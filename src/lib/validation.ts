@@ -21,6 +21,17 @@ export const stage1Schema = identity
     path: ['vehicle_capacity'],
     message: 'Motor maksimal 2 orang termasuk driver',
   });
+export const paymentParticipantSchema = identity
+  .extend({
+    vehicle_owner: z.string().trim().max(80).default(''),
+    vehicle_driver: z.string().trim().max(80).default(''),
+    vehicle_capacity: z.coerce.number().int().min(1).max(50).default(5),
+    confirmed: z.literal(true, { error: 'Konfirmasi nama dan kendaraan terlebih dahulu' }),
+  })
+  .refine((v) => v.vehicle_type !== 'MOTORCYCLE' || v.vehicle_capacity <= 2, {
+    path: ['vehicle_capacity'],
+    message: 'Motor maksimal 2 orang termasuk driver',
+  });
 // The product uses one explicit event timezone (WIB) rather than interpreting
 // datetime-local differently in the organizer browser and Vercel's UTC runtime.
 const deadline = z
