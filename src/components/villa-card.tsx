@@ -139,6 +139,7 @@ export function VillaCard({
   onSelect,
   recommended = false,
   final = false,
+  previewOnly = false,
 }: {
   villa: Villa;
   images?: VillaImage[];
@@ -146,6 +147,7 @@ export function VillaCard({
   onSelect?: () => void;
   recommended?: boolean;
   final?: boolean;
+  previewOnly?: boolean;
 }) {
   const photos = images.filter((i) => i.villa_id === villa.id);
   const cover = villa.cover_path || photos[0]?.storage_path;
@@ -182,14 +184,18 @@ export function VillaCard({
           </div>
         )}
         <h3>{villa.name}</h3>
-        <div className="villa-price">
-          <strong>{rupiah(villa.price)}</strong>
-          <span> / malam</span>
-        </div>
-        <div className="row muted text-sm">
-          <Users size={16} />
-          {villa.capacity} orang
-        </div>
+        {!previewOnly && (
+          <div className="villa-price">
+            <strong>{rupiah(villa.price)}</strong>
+            <span> / malam</span>
+          </div>
+        )}
+        {!previewOnly && (
+          <div className="row muted text-sm">
+            <Users size={16} />
+            {villa.capacity} orang
+          </div>
+        )}
         {villa.address && <p className="line-clamp-1 text-sm">{villa.address}</p>}
         {villa.facilities.length > 0 && (
           <p className="text-sm muted line-clamp-2">
@@ -213,16 +219,18 @@ export function VillaCard({
                   </DialogDescription>
                 </div>
                 {gallery.length > 0 && <VillaGallery paths={gallery} name={villa.name} />}
-                <dl className="villa-facts">
-                  <div>
-                    <dt>Harga per malam</dt>
-                    <dd>{rupiah(villa.price)}</dd>
-                  </div>
-                  <div>
-                    <dt>Kapasitas</dt>
-                    <dd>{villa.capacity} orang</dd>
-                  </div>
-                </dl>
+                {!previewOnly && (
+                  <dl className="villa-facts">
+                    <div>
+                      <dt>Harga per malam</dt>
+                      <dd>{rupiah(villa.price)}</dd>
+                    </div>
+                    <div>
+                      <dt>Kapasitas</dt>
+                      <dd>{villa.capacity} orang</dd>
+                    </div>
+                  </dl>
+                )}
                 <section className="stack-sm">
                   <h3>Fasilitas</h3>
                   {villa.facilities.length ? (
@@ -262,6 +270,16 @@ export function VillaCard({
               </div>
             </DialogContent>
           </Dialog>
+          {previewOnly && villa.google_maps_url && (
+            <a
+              className="text-link row text-sm"
+              href={villa.google_maps_url}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Google Maps <ExternalLink size={15} />
+            </a>
+          )}
           {onSelect && (
             <Button
               type="button"

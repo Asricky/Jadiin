@@ -1,6 +1,5 @@
 import { paymentMethods } from '@/lib/payment-methods';
-import { transportOffers } from '@/lib/transport-offers-server';
-import { TransportPicker } from '@/components/transport-picker';
+import { VillaCard } from '@/components/villa-card';
 import { appOrigin } from '@/lib/app-origin';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -16,7 +15,7 @@ export default async function Stage2({ params }: { params: Promise<{ slug: strin
   const p = await session(event.id);
   if (!p) redirect(`/e/${slug}`);
   if (!['STAGE_2_OPEN', 'COMPLETED'].includes(event.status)) redirect(`/e/${slug}/dashboard`);
-  const [data, { data: payment }, offers] = await Promise.all([
+  const [data, { data: payment }] = await Promise.all([
     bundle(event),
     service()
       .from('payments')
@@ -24,7 +23,6 @@ export default async function Stage2({ params }: { params: Promise<{ slug: strin
       .eq('participant_id', p.id)
       .eq('event_id', event.id)
       .maybeSingle(),
-    transportOffers(event.id),
   ]);
   const villa = data.villas.find((v) => v.id === event.final_villa_id);
   const amount = payment && payment.status !== 'REJECTED' ? payment.amount : event.cost_per_person!;
@@ -37,19 +35,19 @@ export default async function Stage2({ params }: { params: Promise<{ slug: strin
         <span aria-hidden="true"> • </span>
         <strong title={villa?.name}>{villa?.name || 'Tujuan belum ditetapkan'}</strong>
       </p>
-      <TransportPicker
-        slug={slug}
-        initial={{
-          offers,
-          groups: data.groups,
-          members: data.members,
-          participants: data.participants.map((p) => ({ id: p.id, name: p.name })),
-          participantId: p.id,
-          open: event.status === 'STAGE_2_OPEN',
-        }}
-      />
+      {villa && (
+        <section className="stack-sm" aria-label="Preview villa final">
+          <VillaCard villa={villa} images={data.images} final previewOnly />
+        </section>
+      )}
+      {slug === 'final-makrab-02' && (
+        <section className="notice stack-sm" aria-label="Titik kumpul">
+          <strong>Titik kumpul: Indomaret Podomoro</strong>
+          <p>{prettyDate(event.final_date!)} pukul 13.00 WIB</p>
+        </section>
+      )}
       <section className="card stack" id="payment" aria-label="Pembayaran">
-        <span className="eyebrow">02 / PEMBAYARAN</span>
+        <span className="eyebrow">PEMBAYARAN</span>
         <h2>
           {rupiah(amount)} <small className="muted">/ orang</small>
         </h2>

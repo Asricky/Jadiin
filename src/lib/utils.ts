@@ -31,7 +31,9 @@ export const inputDateTime = (s: string | null) =>
   s ? new Date(new Date(s).getTime() + 7 * 60 * 60 * 1000).toISOString().slice(0, 16) : '';
 export const mediaUrl = (path: string | null) =>
   path
-    ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/villa-media/${path}`
+    ? path.startsWith('/villas/')
+      ? path
+      : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/villa-media/${path}`
     : null;
 export async function api<T = Record<string, string>>(url: string, body?: unknown): Promise<T> {
   const r = await fetch(url, {
